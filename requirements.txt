@@ -1,1 +1,11 @@
-telethon>=1.36
+# Telethon v1 در حالت نگهداری است ولی فعال — نسخه ۱.۴۴ (ژوئن ۲۰۲۶).
+# مخزن گیت‌هاب بایگانی شده و به codeberg.org/Lonami/Telethon منتقل شده؛
+# انتشار روی PyPI ادامه دارد. Pyrogram از ۲۰۲۳ مرده است — استفاده نکن.
+Telethon>=1.44,<2
+
+aiohttp>=3.9,<4
+
+tomli>=2.0 ; python_version < "3.11"
+
+# اختیاری — فقط اگر source.kind = "mpris" باشد (لینوکس دسکتاپ)
+# dbus-next>=0.2.3
