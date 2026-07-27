@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# Telegram session + login state — NEVER push these
+*.session
+*.session-journal
+.login_state.json
+
+# Personal deploy helper (contains the VPS password) — local only
+deploy/remote.py
+
+# Installer backups
+*.old-*/

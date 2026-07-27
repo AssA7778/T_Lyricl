@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram Live Lyrics Bio (playlist userbot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/lyrics-bio
+ExecStart=/opt/lyrics-bio/venv/bin/python /opt/lyrics-bio/lyrics_bio.py
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
