@@ -1,1 +1,1 @@
-from .lrc import Line, Lyrics, Word, parse_lrc  # noqa: F401
+from .lrc import Line, Lyrics, Word, parse_lrc

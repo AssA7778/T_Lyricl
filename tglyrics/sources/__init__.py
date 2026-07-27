@@ -1,8 +1,7 @@
-from .base import Source  # noqa: F401
+from .base import Source
 
 
 def build(kind: str, cfg: dict, clock):
-    """کارخانه‌ی منبع."""
     kind = (kind or "webhook").lower()
     if kind == "webhook":
         from .webhook import WebhookSource

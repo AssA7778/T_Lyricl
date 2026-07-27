@@ -1,5 +1,3 @@
-"""تست‌های هسته — بدون شبکه، بدون تلگرام."""
-
 from __future__ import annotations
 
 import asyncio
@@ -166,20 +164,11 @@ class TestClock(unittest.TestCase):
 
 
 class TestClockWakeup(unittest.IsolatedAsyncioTestCase):
-    """
-    رگرسیونِ مهم: تغییری که *وسط محاسبه* برسد نباید گم شود.
-
-    اگر پرچم را قبل از خوابیدن پاک کنیم (به‌جای قبل از خواندنِ وضعیت)،
-    عوض‌شدن آهنگ می‌تواند تا چند ثانیه نادیده بماند — یعنی همان تأخیری که
-    نباید وجود داشته باشد.
-    """
 
     async def test_change_during_computation_is_not_lost(self):
         c = PlaybackClock()
         c.consume()
-        # «محاسبه» انجام می‌شود و همان وسط، منبع خبر می‌دهد
         c.update(Track(title="جدید", artist="کسی"), 0, True)
-        # حالا می‌خوابیم — باید فوراً بیدار شویم، نه بعد از ۵ ثانیه
         woke = await asyncio.wait_for(c.wait_change(5.0), timeout=0.5)
         self.assertTrue(woke)
 
@@ -260,7 +249,6 @@ class TestRender(unittest.TestCase):
         f = r.render(ly, None, 500)
         self.assertLessEqual(len(f.text), 15)
         self.assertTrue(f.text.endswith("…"))
-        # بدون بین‌نوا، خط تا شروع خط بعدی می‌ماند
         self.assertEqual(f.until_ms, 10000)
 
     def test_truncate_mode_yields_to_interlude(self):
@@ -275,7 +263,6 @@ class TestRender(unittest.TestCase):
         r = self.r(limit=7, min_chunk_ms=300, show_interlude=False)
         f = r.render(ly, None, 10100)
         self.assertLessEqual(len(f.text), 7)
-        # مرز تیکه باید روی تایم یکی از کلمات بنشیند
         self.assertIn(f.until_ms, (10500.0, 11000.0, 11500.0))
 
     def test_long_gap_becomes_interlude(self):
@@ -315,7 +302,6 @@ class TestRender(unittest.TestCase):
             self.assertLessEqual(f.until_ms, 6000)
 
     def test_monotonic_until(self):
-        """until_ms همیشه باید جلوتر از زمان فعلی باشد، وگرنه حلقه داغ می‌کند."""
         long = "الف ب پ ت ث ج چ ح خ د ذ ر ز ژ س ش ص ض ط ظ ع غ ف ق ک گ ل م ن و ه ی"
         ly = parse_lrc(f"[00:00.00]{long}\n[00:09.00]بعدی\n", duration_ms=20000)
         r = self.r(limit=16, min_chunk_ms=400)
@@ -338,7 +324,6 @@ class TestTranslit(unittest.TestCase):
     def test_candidates_include_latin_for_persian(self):
         cands = candidates("محسن یگانه", "دوباره")
         self.assertTrue(any(a.isascii() and a for a, _ in cands))
-        # اصل هم باید باشد
         self.assertTrue(any("محسن" in a for a, _ in cands))
 
     def test_candidates_for_latin_input(self):
@@ -356,11 +341,6 @@ class TestTranslit(unittest.TestCase):
 
 
 class TestSkeletonMatching(unittest.TestCase):
-    """
-    مهم‌ترین ترفندِ تطبیقِ فارسی: فارسی واکه‌ی کوتاه نمی‌نویسد، پس هیچ
-    ترنسلیتری «بهت قول میدم» را به «Behet Ghol Midam» تبدیل نمی‌کند.
-    ولی اسکلتِ همخوان‌ها یکی است.
-    """
 
     def test_skeleton_bridges_persian_and_finglish(self):
         from tglyrics.lyrics.translit import skeleton

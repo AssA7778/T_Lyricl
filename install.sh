@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════════════
-#  tglyrics — نصب خودکار روی VPS (اوبونتو/دبیان + systemd)
-#
-#  یک‌خطی (لازم نیست چیزی کلون کنی):
-#    bash <(curl -fsSL https://raw.githubusercontent.com/AssA7778/T_Lyricl/main/install.sh)
-#
-#  یا از داخل پوشه‌ی پروژه:   sudo bash install.sh
-#
-#  دستورها (به آخر همان دستور اضافه کن):
-#    update     آپدیت (همان install)       status     وضعیت سرویس
-#    logs       لاگ زنده                    restart    ری‌استارت
-#    login      لاگین دوباره‌ی تلگرام        uninstall  حذف کامل
-# ═══════════════════════════════════════════════════════════════════════
 set -Eeuo pipefail
 
 REPO_URL="https://github.com/AssA7778/T_Lyricl.git"
@@ -22,19 +9,19 @@ SERVICE=tglyrics
 RAW_INSTALL="https://raw.githubusercontent.com/AssA7778/T_Lyricl/main/install.sh"
 
 c()   { printf '\033[1;36m%s\033[0m\n' "$*"; }
-ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
+ok()  { printf '\033[32m+\033[0m %s\n' "$*"; }
 warn(){ printf '\033[33m!\033[0m %s\n' "$*"; }
-die() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+die() { printf '\033[31mx\033[0m %s\n' "$*" >&2; exit 1; }
 
 CLONE_TMP=""
 cleanup() { if [[ -n "$CLONE_TMP" ]]; then rm -rf "$CLONE_TMP"; fi; }
 trap cleanup EXIT
-trap 'printf "\033[31m✗\033[0m اسکریپت وسط کار خطا خورد — پیام‌های بالا را ببین.\n" >&2' ERR
+trap 'printf "\033[31mx\033[0m installer failed — see the messages above.\n" >&2' ERR
 
 has_tty() { bash -c ': </dev/tty' 2>/dev/null; }
-require_root() { [[ $EUID -eq 0 ]] || die "با root اجرا کن:  sudo -i  و بعد دوباره (یا sudo bash install.sh)"; }
+require_root() { [[ $EUID -eq 0 ]] || die "run as root:  sudo -i  then run this again (or: sudo bash install.sh)"; }
 
-cfg_get() {  # cfg_get <key> ← اولین «key = "…"» یا «key = 123» از config.toml
+cfg_get() {
   sed -n "s/^${1} *= *\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$DIR/config.toml" 2>/dev/null | head -1
 }
 
@@ -48,22 +35,22 @@ resolve_src() {
   here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
   if [[ -n "$here" && -f "$here/requirements.txt" && -d "$here/tglyrics" ]]; then
     SRC="$here"
-    ok "منبع کد: همین پوشه ($SRC)"
+    ok "source: local checkout ($SRC)"
   else
     CLONE_TMP="$(mktemp -d)"
-    c "دریافت کد از گیت‌هاب…"
+    c "fetching code from GitHub..."
     git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$CLONE_TMP/src" \
-      || die "کلون نشد — دسترسی به گیت‌هاب را چک کن: $REPO_URL"
+      || die "clone failed — check network access to $REPO_URL"
     SRC="$CLONE_TMP/src"
-    ok "منبع کد: $REPO_URL"
+    ok "source: $REPO_URL"
   fi
 }
 
 do_install() {
   require_root
-  printf '\033[1;36m\n  🎙 tglyrics — لیریکِ زنده‌ی سینک‌شده توی بیوی تلگرام\n  ────────────────────────────────────────────────────\033[0m\n\n'
+  printf '\033[1;36m\n  tglyrics — live synced lyrics in your Telegram bio\n  --------------------------------------------------\033[0m\n\n'
 
-  c "۱/۷  پیش‌نیازها"
+  c "1/7  prerequisites"
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
@@ -71,24 +58,23 @@ do_install() {
   elif command -v dnf >/dev/null 2>&1; then
     dnf install -y -q python3 git curl >/dev/null
   else
-    warn "پکیج‌منیجر ناشناخته — فرض می‌کنم python3 و git از قبل نصبند"
+    warn "unknown package manager — assuming python3 and git are already installed"
   fi
-  command -v systemctl >/dev/null 2>&1 || die "این سرور systemd ندارد — اینستالر فقط با systemd کار می‌کند"
-  ok "پایتون آماده است ($(python3 -V))"
+  command -v systemctl >/dev/null 2>&1 || die "this server has no systemd — the installer requires it"
+  ok "python ready ($(python3 -V))"
 
   resolve_src
 
-  # پروژه‌ی قدیمیِ پلی‌لیست ثابت (lyrics-bio) نباید هم‌زمان بیو را بنویسد
   if systemctl list-unit-files 2>/dev/null | grep -q '^lyrics-bio\.service'; then
     systemctl disable --now lyrics-bio >/dev/null 2>&1 || true
-    warn "سرویس قدیمی lyrics-bio خاموش شد — دو برنامه نباید هم‌زمان بیو بنویسند"
+    warn "old lyrics-bio service disabled — two writers must never fight over the bio"
   fi
 
-  c "۲/۷  کاربر سرویس"
+  c "2/7  service user"
   id -u "$USER_NAME" &>/dev/null || useradd --system --home "$DIR" --shell /usr/sbin/nologin "$USER_NAME"
-  ok "کاربر $USER_NAME"
+  ok "user $USER_NAME"
 
-  c "۳/۷  کپی فایل‌ها به $DIR"
+  c "3/7  copying files to $DIR"
   systemctl stop "$SERVICE" 2>/dev/null || true
   mkdir -p "$DIR"
   local d f
@@ -102,50 +88,50 @@ do_install() {
   done
   mkdir -p "$DIR/data" "$DIR/lyrics"
   [[ -f "$SRC/lyrics/HOWTO.txt" ]] && cp "$SRC/lyrics/HOWTO.txt" "$DIR/lyrics/"
-  ok "فایل‌ها کپی شدند (config.toml و data/ و lyrics/ دست نمی‌خورند)"
+  ok "files copied (config.toml, data/ and lyrics/ are left untouched)"
 
-  c "۴/۷  محیط مجازی و کتابخانه‌ها"
+  c "4/7  virtualenv and dependencies"
   [[ -x "$DIR/.venv/bin/python" ]] || python3 -m venv "$DIR/.venv"
   "$DIR/.venv/bin/pip" install -q --upgrade pip
   "$DIR/.venv/bin/pip" install -q -r "$DIR/requirements.txt"
-  ok "کتابخانه‌ها نصب شدند"
+  ok "dependencies installed"
 
-  c "۵/۷  کانفیگ"
+  c "5/7  config"
   if [[ ! -f "$DIR/config.toml" ]]; then
     cp "$DIR/config.example.toml" "$DIR/config.toml"
     local token
     token=$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
     sed -i "s|CHANGE_ME_TO_SOMETHING_LONG|$token|" "$DIR/config.toml"
-    ok "config.toml ساخته شد (توکن وب‌هوک تصادفی هم تولید شد)"
+    ok "config.toml created (random webhook token generated)"
   else
-    warn "config.toml از قبل بود — دست نخورد"
+    warn "config.toml already exists — kept as is"
   fi
 
-  c "۶/۷  سشن تلگرام"
+  c "6/7  Telegram session"
   CONFIG_READY=0
   if config_ok; then
     CONFIG_READY=1
-    ok "کانفیگ کامل است — لاگین لازم نیست"
+    ok "config is complete — no login needed"
   elif has_tty; then
-    echo "برای لاگین، api_id و api_hash لازم داری (my.telegram.org → API development tools)."
+    echo "You need an api_id and api_hash (my.telegram.org -> API development tools)."
     local ans=""
-    read -r -p "همین حالا سشن تلگرام را بسازیم؟ [Y/n] " ans </dev/tty || true
+    read -r -p "Create the Telegram session now? [Y/n] " ans </dev/tty || true
     if [[ ! "$ans" =~ ^[nN] ]]; then
       if (cd "$DIR" && "$DIR/.venv/bin/python" "$DIR/login.py" --write "$DIR/config.toml" </dev/tty); then
         config_ok && CONFIG_READY=1
       fi
-      [[ "$CONFIG_READY" = 1 ]] || warn "لاگین کامل نشد — بعداً:  sudo bash $DIR/install.sh login"
+      [[ "$CONFIG_READY" = 1 ]] || warn "login incomplete — later run:  sudo bash $DIR/install.sh login"
     else
-      warn "باشه — بعداً:  sudo bash $DIR/install.sh login"
+      warn "ok — later run:  sudo bash $DIR/install.sh login"
     fi
   else
-    warn "ترمینال تعاملی نیست — بعداً روی سرور:  sudo bash $DIR/install.sh login"
+    warn "no interactive terminal — later run:  sudo bash $DIR/install.sh login"
   fi
 
   chown -R "$USER_NAME:$USER_NAME" "$DIR"
   chmod 600 "$DIR/config.toml"
 
-  c "۷/۷  سرویس systemd"
+  c "7/7  systemd service"
   cp "$DIR/tglyrics.service" "/etc/systemd/system/$SERVICE.service"
   systemctl daemon-reload
   systemctl enable "$SERVICE" >/dev/null 2>&1
@@ -153,87 +139,83 @@ do_install() {
     systemctl restart "$SERVICE"
     sleep 3
     if systemctl is-active --quiet "$SERVICE"; then
-      ok "سرویس روشن است 🎙"
+      ok "service is running"
     else
-      die "سرویس بالا نیامد — ببین:  journalctl -u $SERVICE -n 50"
+      die "service failed to start — check:  journalctl -u $SERVICE -n 50"
     fi
   else
-    warn "سرویس روشن نشد چون کانفیگ کامل نیست. بعد از لاگین:  systemctl restart $SERVICE"
+    warn "service not started (config incomplete). After login:  systemctl restart $SERVICE"
   fi
 
   local port token_now ip
   port="$(cfg_get port)"; port="${port:-8787}"
   token_now="$(cfg_get token)"
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw allow "$port"/tcp >/dev/null 2>&1 && ok "پورت $port روی فایروال باز شد" || warn "پورت $port را دستی باز کن"
+    ufw allow "$port"/tcp >/dev/null 2>&1 && ok "port $port opened in ufw" || warn "open port $port manually"
   fi
   ip=$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
 
   cat <<EOF
 
-────────────────────────────────────────────────────────────
- نصب تمام شد ✔ — حالا پلیرت را وصل کن:
-────────────────────────────────────────────────────────────
+------------------------------------------------------------
+ Done. Now connect your player:
+------------------------------------------------------------
 
- ۱) روی مرورگرت Tampermonkey (یا Violentmonkey) نصب کن
- ۲) یوزراسکریپت را باز کن تا نصب شود:
-       $DIR/userscript/tglyrics.user.js
-    یا مستقیم از گیت‌هاب:
+ 1) Install Tampermonkey (or Violentmonkey) in your browser
+ 2) Open this URL to install the userscript:
        https://raw.githubusercontent.com/AssA7778/T_Lyricl/main/userscript/tglyrics.user.js
- ۳) از منوی افزونه → «⚙️ تنظیم سرور tglyrics»:
-       سرور : http://$ip:$port
-       توکن : $token_now
- ۴) «🔌 تست اتصال» را بزن و یک آهنگ پخش کن 🎶
-    (YouTube Music / SoundCloud / Spotify Web / Apple Music / …)
+ 3) Extension menu -> "tglyrics server settings":
+       server : http://$ip:$port
+       token  : $token_now
+ 4) Hit "connection test", then play a song
+    (YouTube Music / SoundCloud / Spotify Web / Apple Music / ...)
 
- تست بدون دست‌زدن به تلگرام:
+ Dry-run without touching Telegram:
     cd $DIR && .venv/bin/python simulate.py "Radiohead" "Creep"
 
- کنترل از داخل تلگرام — توی Saved Messages بنویس:
-    .lrc            وضعیت
-    .lrc on/off     روشن/خاموش (خاموش = بیوی اصلی برمی‌گردد)
-    .lrc sync +300  لیریک را جلو ببر
-    .lrc help       همه‌ی دستورها
+ Control from inside Telegram (type in Saved Messages):
+    .lrc          status          .lrc off      pause (restores bio)
+    .lrc +300     nudge lyrics    .lrc help     all commands
 
- مدیریت:
-    systemctl status $SERVICE          وضعیت
-    journalctl -u $SERVICE -f          لاگ زنده
-    bash <(curl -fsSL $RAW_INSTALL) update       آپدیت
-    bash <(curl -fsSL $RAW_INSTALL) uninstall    حذف کامل
+ Manage:
+    systemctl status $SERVICE          status
+    journalctl -u $SERVICE -f          live log
+    bash <(curl -fsSL $RAW_INSTALL) update       update
+    bash <(curl -fsSL $RAW_INSTALL) uninstall    remove
 
 EOF
 }
 
 do_login() {
   require_root
-  [[ -f "$DIR/config.toml" ]] || die "اول نصب کن:  bash <(curl -fsSL $RAW_INSTALL)"
+  [[ -f "$DIR/config.toml" ]] || die "install first:  bash <(curl -fsSL $RAW_INSTALL)"
   (cd "$DIR" && "$DIR/.venv/bin/python" "$DIR/login.py" --write "$DIR/config.toml" </dev/tty)
   chown "$USER_NAME:$USER_NAME" "$DIR/config.toml"
   chmod 600 "$DIR/config.toml"
   chown -R "$USER_NAME:$USER_NAME" "$DIR/data" 2>/dev/null || true
   systemctl restart "$SERVICE"
-  ok "سرویس با سشن جدید ری‌استارت شد"
+  ok "service restarted with the new session"
 }
 
 do_uninstall() {
   require_root
-  c "حذف tglyrics"
+  c "removing tglyrics"
   systemctl disable --now "$SERVICE" 2>/dev/null || true
   rm -f "/etc/systemd/system/$SERVICE.service"
   systemctl daemon-reload
-  ok "سرویس حذف شد"
+  ok "service removed"
   if has_tty; then
     local ans=""
-    read -r -p "فایل‌ها و سشن ($DIR) هم پاک شود؟ [y/N] " ans </dev/tty || true
+    read -r -p "Also delete files and the Telegram session ($DIR)? [y/N] " ans </dev/tty || true
     if [[ "$ans" =~ ^[yY] ]]; then
       rm -rf "$DIR"
       id -u "$USER_NAME" &>/dev/null && userdel "$USER_NAME" 2>/dev/null || true
-      ok "فایل‌ها و کاربر سرویس پاک شدند"
+      ok "files and service user removed"
     else
-      warn "فایل‌ها ماندند: $DIR"
+      warn "files kept: $DIR"
     fi
   else
-    warn "فایل‌ها ماندند: $DIR   (اگر خواستی: rm -rf $DIR)"
+    warn "files kept: $DIR   (to delete: rm -rf $DIR)"
   fi
 }
 
@@ -242,7 +224,7 @@ case "${1:-install}" in
   uninstall|remove) do_uninstall ;;
   status)           systemctl status "$SERVICE" --no-pager ;;
   logs)             journalctl -u "$SERVICE" -f ;;
-  restart)          require_root; systemctl restart "$SERVICE"; ok "ری‌استارت شد" ;;
+  restart)          require_root; systemctl restart "$SERVICE"; ok "restarted" ;;
   login)            do_login ;;
-  *) echo "دستورها: install (پیش‌فرض) | update | status | logs | restart | login | uninstall"; exit 1 ;;
+  *) echo "usage: install (default) | update | status | logs | restart | login | uninstall"; exit 1 ;;
 esac

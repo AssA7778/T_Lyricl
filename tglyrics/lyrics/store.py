@@ -1,19 +1,3 @@
-"""
-انبار لیریک — کش SQLite + فایل‌های دستیِ کاربر.
-
-اولویت:
-    ۱. فایل .lrc دستی توی پوشه‌ی lyrics/   ← همیشه برنده است
-    ۲. کش
-    ۳. اینترنت (LRCLIB)
-
-پوشه‌ی دستی برای آهنگ‌های فارسیِ کمیاب حیاتی است — چیزی که LRCLIB ندارد را
-یک بار خودت می‌سازی و برای همیشه دقیق است.
-
-اسم فایل هر کدام از این‌ها می‌تواند باشد:
-    Artist - Title.lrc
-    Title.lrc
-"""
-
 from __future__ import annotations
 
 import logging
@@ -30,8 +14,8 @@ log = logging.getLogger("tglyrics.store")
 
 __all__ = ["LyricsStore", "CacheHit"]
 
-NEG_TTL = 6 * 3600      # آهنگی که پیدا نشد، ۶ ساعت دیگر دوباره امتحان می‌شود
-POS_TTL = 180 * 86400   # لیریکِ پیداشده عملاً برای همیشه
+NEG_TTL = 6 * 3600
+POS_TTL = 180 * 86400
 
 _PUNCT = re.compile(r"[^\w\s؀-ۿ]+")
 
@@ -80,7 +64,6 @@ class LyricsStore:
         self._local_index: dict[str, Path] = {}
         self._local_mtime = 0.0
 
-    # ── چرخه‌ی عمر ───────────────────────────────────────────────
     def open(self) -> None:
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)) or ".", exist_ok=True)
         self._db = sqlite3.connect(self.db_path, isolation_level=None)
@@ -95,10 +78,8 @@ class LyricsStore:
             self._db.close()
             self._db = None
 
-    # ── کش ───────────────────────────────────────────────────────
     @staticmethod
     def _bucket(duration_ms: int) -> int:
-        """duration را به سطلِ ۵ ثانیه‌ای گرد کن تا نوسان پلیر کش را بی‌اثر نکند."""
         return int(round((duration_ms or 0) / 5000.0))
 
     def get(self, key: str, duration_ms: int = 0) -> Optional[CacheHit]:
@@ -138,7 +119,6 @@ class LyricsStore:
         cur = self._db.execute("DELETE FROM lyrics WHERE key=?", (key,))
         return cur.rowcount or 0
 
-    # ── آفست هر آهنگ ─────────────────────────────────────────────
     def get_offset(self, key: str) -> int:
         if not self._db:
             return 0
@@ -155,7 +135,6 @@ class LyricsStore:
         else:
             self._db.execute("DELETE FROM offsets WHERE key=?", (key,))
 
-    # ── kv ساده (برای بیوی اصلی و…) ─────────────────────────────
     def kv_get(self, k: str) -> Optional[str]:
         if not self._db:
             return None
@@ -167,7 +146,6 @@ class LyricsStore:
             return
         self._db.execute("INSERT OR REPLACE INTO kv (k, v) VALUES (?,?)", (k, v))
 
-    # ── فایل‌های دستی ────────────────────────────────────────────
     def _reindex_local(self) -> None:
         if not self.local_dir or not self.local_dir.is_dir():
             return
@@ -201,7 +179,6 @@ class LyricsStore:
             self._reindex_local()
 
     def local(self, artist: str, title: str) -> Optional[tuple[str, str]]:
-        """(متن خام، مسیر) یا None"""
         if not self.local_dir:
             return None
         self._maybe_reindex()
@@ -213,7 +190,6 @@ class LyricsStore:
             if p:
                 return self._read(p)
 
-        # تطبیق نرم: کلیدی که عنوان داخلش باشد
         nt = norm_key(title)
         if len(nt) >= 4:
             for k, p in self._local_index.items():

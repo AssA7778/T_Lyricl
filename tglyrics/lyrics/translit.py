@@ -1,19 +1,3 @@
-"""
-فینگلیش‌سازی — *فقط برای جستجو*، نه برای نمایش.
-
-چرا لازم است: توی LRCLIB متادیتای آهنگ‌های فارسی با حروف لاتین ذخیره شده،
-با اینکه خودِ متنِ لیریک فارسی است. تست شد:
-
-    q=محسن یگانه   →  ۰ نتیجه
-    q=Mohsen Yeganeh →  ۸ نتیجه (۷ تاش سینک‌شده)
-
-پس اگر اسم آهنگ را همان‌طور که از پلیر می‌آید بفرستیم، فکر می‌کنیم هیچ
-آهنگ فارسی‌ای لیریک ندارد — در حالی که دارد.
-
-خروجی این ماژول تلفظِ بی‌نقص نیست و لازم هم نیست باشد؛ جستجوی LRCLIB فازی
-است. ما چند کاندیدا می‌سازیم و همه را امتحان می‌کنیم.
-"""
-
 from __future__ import annotations
 
 import re
@@ -24,12 +8,10 @@ __all__ = ["romanize", "normalize_fa", "candidates", "has_persian", "skeleton"]
 
 _PERSIAN = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
 
-# اعراب، کشیده، نیم‌فاصله، و علائم جهت‌دهی
 _STRIP = re.compile(r"[ً-ٰٟـ​-‏‪-‮﻿]")
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
-# یکسان‌سازی عربی → فارسی
 _UNIFY = str.maketrans(
     {
         "ي": "ی", "ى": "ی", "ﻯ": "ی", "ﻰ": "ی",
@@ -41,7 +23,6 @@ _UNIFY = str.maketrans(
     }
 )
 
-# نگاشت پایه‌ی حرف‌به‌حرف
 _MAP = {
     "آ": "a", "ا": "a", "ب": "b", "پ": "p", "ت": "t", "ث": "s",
     "ج": "j", "چ": "ch", "ح": "h", "خ": "kh", "د": "d", "ذ": "z",
@@ -51,9 +32,8 @@ _MAP = {
     "و": "o", "ه": "h", "ی": "i", "ء": "", "ٔ": "",
 }
 
-# ترکیب‌های پرتکرار که حرف‌به‌حرف بد از آب درمی‌آیند
 _DIGRAPHS = [
-    ("خوا", "kha"),      # خواب → khab
+    ("خوا", "kha"),
     ("ای", "ey"),
     ("او", "u"),
     ("یی", "yi"),
@@ -63,7 +43,6 @@ _DIGRAPHS = [
     ("ین", "in"),
 ]
 
-# اسم‌های خیلی رایج که ترنسلیت خودکار خرابشان می‌کند
 _OVERRIDES = {
     "محسن یگانه": "Mohsen Yeganeh",
     "سیروان خسروی": "Sirvan Khosravi",
@@ -110,12 +89,6 @@ def has_persian(s: str) -> bool:
 
 
 def normalize_fa(s: str) -> str:
-    """
-    یکسان‌سازی متن فارسی برای *مقایسه* (نه نمایش).
-
-    نیم‌فاصله و اعراب حذف می‌شوند، پس خروجی را هرگز به کاربر نشان نده —
-    متنِ نمایشی همیشه همان چیزی است که از فایل LRC می‌آید.
-    """
     if not s:
         return ""
     s = unicodedata.normalize("NFKC", s)
@@ -127,7 +100,6 @@ def normalize_fa(s: str) -> str:
 
 
 def romanize(s: str) -> str:
-    """فارسی → لاتینِ تقریبی. برای جستجو کافی است."""
     if not s:
         return ""
     s = normalize_fa(s)
@@ -149,7 +121,6 @@ def romanize(s: str) -> str:
             out.append(" ")
         elif ch.isascii():
             out.append(ch)
-        # بقیه دور ریخته می‌شوند
 
     res = "".join(out)
     res = re.sub(r"([bcdfghjklmnpqrstvwxyz])\1+", r"\1\1", res, flags=re.I)
@@ -158,20 +129,6 @@ def romanize(s: str) -> str:
 
 
 def skeleton(s: str) -> str:
-    """
-    «اسکلتِ بی‌واکه» — ترفندی که تطبیقِ فارسی را نجات می‌دهد.
-
-    فارسی واکه‌های کوتاه را نمی‌نویسد، پس هیچ ترنسلیترِ خودکاری نمی‌تواند
-    «بهت قول میدم» را به «Behet Ghol Midam» تبدیل کند؛ چیزی مثل
-    «bht ghol midm» در می‌آید و مقایسه‌ی مستقیم شکست می‌خورد.
-
-    ولی اگر از *هر دو طرف* واکه‌ها را برداریم:
-
-        بهت قول میدم    → bht ghol midm → bht ghl mdm
-        Behet Ghol Midam →              → bht ghl mdm   ✓
-
-    اسکلتِ همخوان‌ها همان است، چون فارسی دقیقاً همین‌ها را می‌نویسد.
-    """
     if not s:
         return ""
     t = normalize_fa(s)
@@ -184,11 +141,6 @@ def skeleton(s: str) -> str:
 
 
 def candidates(artist: str, title: str) -> list[tuple[str, str]]:
-    """
-    چند جفتِ (artist, title) برای امتحان کردن، به ترتیب اولویت.
-
-    هم اصل را نگه می‌داریم (شاید انگلیسی باشد) هم فینگلیش را.
-    """
     a0, t0 = normalize_fa(artist or ""), normalize_fa(title or "")
     seen: set[tuple[str, str]] = set()
     out: list[tuple[str, str]] = []
@@ -208,10 +160,8 @@ def candidates(artist: str, title: str) -> list[tuple[str, str]]:
     if has_persian(a0) or has_persian(t0):
         ra, rt = romanize(a0), romanize(t0)
         add(ra, rt)
-        # گاهی اسم خواننده فارسی است ولی اسم آهنگ لاتین یا برعکس
         add(ra, t0)
         add(a0, rt)
-        # بدون اسم خواننده — LRCLIB فازی است و ممکن است پیدا کند
         add("", rt)
 
     add("", t0)

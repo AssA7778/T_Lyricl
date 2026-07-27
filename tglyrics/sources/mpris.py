@@ -1,12 +1,3 @@
-"""
-منبع MPRIS (اختیاری) — پلیرِ روی همین ماشینِ لینوکسی.
-
-فقط وقتی به درد می‌خورد که برنامه روی *همان* کامپیوتری اجرا شود که آهنگ پخش
-می‌کند (نه VPS). MPRIS موقعیت را با دقتِ میکروثانیه می‌دهد.
-
-نیازمندی:  pip install dbus-next
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -43,7 +34,7 @@ class MprisSource(Source):
 
     async def start(self) -> None:
         try:
-            from dbus_next.aio import MessageBus  # noqa: F401
+            from dbus_next.aio import MessageBus
         except ImportError as e:
             raise RuntimeError(
                 "منبع mpris به dbus-next نیاز دارد:  pip install dbus-next"
@@ -87,7 +78,7 @@ class MprisSource(Source):
         return [n for n in reply.body[0] if n.startswith(MPRIS_PREFIX)]
 
     async def _props(self, name: str) -> Optional[dict]:
-        from dbus_next import Message, MessageType, Variant  # noqa: F401
+        from dbus_next import Message, MessageType, Variant
 
         bus = await self._connect()
         reply = await bus.call(
@@ -110,7 +101,7 @@ class MprisSource(Source):
                 await self._tick()
             except asyncio.CancelledError:
                 raise
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.debug("mpris: %s", e)
                 self._bus = None
             await asyncio.sleep(self.poll)

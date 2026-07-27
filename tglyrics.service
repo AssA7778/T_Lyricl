@@ -1,6 +1,6 @@
 [Unit]
 Description=tglyrics — live synced lyrics in Telegram bio
-Documentation=file:/opt/tglyrics/README.md
+Documentation=https://github.com/AssA7778/T_Lyricl
 After=network-online.target
 Wants=network-online.target
 
@@ -10,23 +10,15 @@ User=tglyrics
 Group=tglyrics
 WorkingDirectory=/opt/tglyrics
 ExecStart=/opt/tglyrics/.venv/bin/python -m tglyrics -c /opt/tglyrics/config.toml
-
-# ری‌استارت همیشه، با فاصله‌ی فزاینده تا اگر کانفیگ خراب بود لاگ را پر نکند
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=300
 StartLimitBurst=10
-
-# SIGTERM ⇒ برنامه خودش بیوی اصلی را برمی‌گرداند. وقت بده.
 KillSignal=SIGTERM
 TimeoutStopSec=20
-
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=tglyrics
-
-# ── سخت‌سازی ──────────────────────────────────────────────────
-# سشن تلگرام داخل config.toml است؛ اگر سرور لو برود اکانت هم می‌رود.
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true

@@ -1,11 +1,3 @@
-"""
-تست انتخابِ لیریک از LRCLIB — بدون شبکه.
-
-لایه‌ی HTTP با داده‌های ساختگیِ هم‌شکلِ پاسخ‌های واقعی جایگزین شده. چیزی که
-اینجا تست می‌شود مهم‌ترین بخشِ کیفیتِ پروژه است: **انتخابِ درست**. لیریکِ
-آهنگِ اشتباه بدتر از نداشتنِ لیریک است.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -31,12 +23,11 @@ def row(rid, track, artist, dur, synced=True, album="", instrumental=False):
 
 
 class Fake(LrcLibClient):
-    """`_json` را جایگزین می‌کند؛ هیچ سوکتی باز نمی‌شود."""
 
     def __init__(self, exact=None, search=None):
         super().__init__(session=None, user_agent="test")
-        self._exact = exact or {}      # (track.lower(), artist.lower()) → row
-        self._search = search or {}    # زیررشته‌ی q → list[row]
+        self._exact = exact or {}
+        self._search = search or {}
         self.calls: list[tuple[str, dict]] = []
 
     async def _json(self, path, params):
@@ -66,7 +57,7 @@ class TestExactPath(unittest.TestCase):
         r = run(c.best("Radiohead", "Creep", duration_ms=239_000))
         self.assertIsNotNone(r)
         self.assertEqual(r.id, 1)
-        self.assertEqual([p for p, _ in c.calls], ["get"])   # سرچ لازم نشد
+        self.assertEqual([p for p, _ in c.calls], ["get"])
 
     def test_falls_back_to_search_when_exact_misses(self):
         c = Fake(search={"radiohead": [row(2, "Creep", "Radiohead", 239)]})
@@ -76,10 +67,6 @@ class TestExactPath(unittest.TestCase):
 
 
 class TestPersian(unittest.TestCase):
-    """
-    سناریوی واقعی: متادیتای پلیر فارسی است ولی LRCLIB فینگلیش ذخیره کرده.
-    بدون فینگلیش‌سازی + اسکلتِ بی‌واکه، این حالت همیشه شکست می‌خورد.
-    """
 
     def test_persian_query_finds_finglish_entry(self):
         c = Fake(
@@ -108,10 +95,6 @@ class TestPersian(unittest.TestCase):
         self.assertEqual(r.id, 12)
 
     def test_never_searches_artist_name_alone(self):
-        """
-        تله‌ی مستندنشده‌ی LRCLIB: `/api/search` با فقط `artist_name`
-        همیشه آرایه‌ی خالی می‌دهد. باید همیشه q یا track_name بفرستیم.
-        """
         c = Fake()
         run(c.best("محسن یگانه", "بهت قول میدم", duration_ms=245_000))
         for path, params in c.calls:

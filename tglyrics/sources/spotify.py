@@ -1,19 +1,3 @@
-"""
-منبع اسپاتیفای (اختیاری).
-
-⚠️ وضعیت در ۲۰۲۶: خودِ endpoint پریمیوم نمی‌خواهد، ولی از ۱۱ فوریه ۲۰۲۶
-اسپاتیفای شرط گذاشته که **صاحبِ اپ** در Development Mode باید پریمیوم داشته
-باشد. اکانت‌های تست لازم نیست پریمیوم باشند — پس اگر کسی با پریمیوم اپ را
-بسازد و تو را به‌عنوان تست‌یوزر اضافه کند، اکانت فریِ تو کار می‌کند.
-ضمناً از ۱۸ ژوئن ۲۰۲۶ refresh token بعد از ۶ ماه منقضی می‌شود و باید دوباره
-لاگین کنی.
-
-نکته‌ی دقت: `progress_ms` اسپاتیفای ۰.۵ تا ۱.۵ ثانیه تأخیرِ تصادفی دارد
-(باگ شناخته‌شده). برای همین اینجا لنگر را فقط وقتی جابه‌جا می‌کنیم که دریفت
-واقعاً بزرگ باشد — وگرنه ساعتِ درون‌یابِ خودمان از عددِ اسپاتیفای دقیق‌تر
-است و نباید با جیترِ آن تکان بخورد.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -54,7 +38,6 @@ class SpotifySource(Source):
         self._token_exp = 0.0
         self._s: Optional[aiohttp.ClientSession] = None
         self._task: Optional[asyncio.Task] = None
-        #: تأخیرِ ذاتیِ اسپاتیفای — با مشاهده تخمین زده می‌شود
         self._bias_ms = 0.0
 
     async def start(self) -> None:
@@ -78,7 +61,6 @@ class SpotifySource(Source):
             await self._s.close()
             self._s = None
 
-    # ── توکن ─────────────────────────────────────────────────────
     async def _access_token(self) -> str:
         if self._token and time.time() < self._token_exp - 60:
             return self._token
@@ -102,7 +84,6 @@ class SpotifySource(Source):
                 self.refresh_token = d["refresh_token"]
             return self._token
 
-    # ── حلقه ─────────────────────────────────────────────────────
     async def _loop(self) -> None:
         backoff = self.poll
         while True:
@@ -111,7 +92,7 @@ class SpotifySource(Source):
                 backoff = self.poll
             except asyncio.CancelledError:
                 raise
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.warning("اسپاتیفای: %s", e)
                 backoff = min(60.0, backoff * 1.8)
             await asyncio.sleep(backoff)
@@ -153,14 +134,12 @@ class SpotifySource(Source):
         pos = float(d.get("progress_ms") or 0.0)
         playing = bool(d.get("is_playing"))
 
-        # نیمی از RTT به‌عنوان تأخیر یک‌طرفه
         latency = rtt_ms / 2.0
 
         snap = self.clock.snapshot()
         same = snap.track and snap.track.key == track.key
         drift = abs(snap.position_ms - (pos + latency)) if same else 9e9
 
-        # جیترِ ±۱.۵ ثانیه‌ی اسپاتیفای نباید ساعتِ ما را تکان بدهد
         if same and snap.playing == playing and drift < 1800:
             self.clock.touch()
             return

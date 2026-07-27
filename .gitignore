@@ -1,4 +1,3 @@
-# ⚠️ کانفیگ حاوی StringSession است — کلیدِ کاملِ اکانت تلگرام.
 config.toml
 *.session
 *.session-journal

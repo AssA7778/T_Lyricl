@@ -1,32 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# ══════════════════════════════════════════════════════════════════
-#  ایجنت اندروید (آزمایشی) — برای وقتی که با *اپِ* یوتیوب‌موزیک یا
-#  اسپاتیفای روی گوشی گوش می‌دهی، نه با مرورگر.
-#
-#  ⚠️  اگر با مرورگر گوش می‌دهی این را لازم نداری. روی اندروید،
-#      فایرفاکس + افزونه‌ی Violentmonkey + همان یوزراسکریپت
-#      خیلی ساده‌تر و پایدارتر است. اول آن را امتحان کن.
-#
-#  این اسکریپت `dumpsys media_session` را می‌خواند که رسمی نیست و
-#  خروجی‌اش بین نسخه‌های اندروید و برندها فرق می‌کند. اگر کار نکرد،
-#  خروجی خامِ dumpsys را ببین و الگوها را تنظیم کن.
-#
-#  پیش‌نیاز (یک بار):
-#     1) Settings → About phone → ۷ بار روی Build number
-#     2) Developer options → Wireless debugging → روشن
-#     3) pkg install android-tools jq
-#     4) adb pair <ip>:<port>   (کد از «Pair device with pairing code»)
-#     5) adb connect <ip>:<port>
-#
-#  اجرا:
-#     SERVER=http://1.2.3.4:8787 TOKEN=xxx bash termux-agent.sh
-# ══════════════════════════════════════════════════════════════════
 set -uo pipefail
 
 SERVER="${SERVER:-}"
 TOKEN="${TOKEN:-}"
-INTERVAL="${INTERVAL:-1}"        # ثانیه بین دو خواندنِ محلی (ارزان است)
-HEARTBEAT="${HEARTBEAT:-10}"     # حداکثر فاصله‌ی دو ارسال
+INTERVAL="${INTERVAL:-1}"
+HEARTBEAT="${HEARTBEAT:-10}"
 
 [[ -n "$SERVER" ]] || { echo "SERVER تنظیم نشده. مثال: SERVER=http://1.2.3.4:8787 TOKEN=xxx bash $0"; exit 1; }
 command -v adb >/dev/null || { echo "adb نیست:  pkg install android-tools"; exit 1; }
@@ -41,7 +19,6 @@ echo "→ $SERVER   (هر $INTERVAL ثانیه چک، هر $HEARTBEAT ثانیه
 last_sig=""
 last_send=0
 
-# اختلاف ساعت با سرور را یک بار حساب کن
 sync_clock() {
   local t0 t3 s
   t0=$(date +%s%3N)
@@ -60,7 +37,6 @@ sync_clock
 while true; do
   DUMP=$(adb shell dumpsys media_session 2>/dev/null)
 
-  # اولین سشنی که state=3 (PLAYING) دارد
   BLOCK=$(printf '%s' "$DUMP" | awk '
     /package=/ {blk=$0; next}
     /state=PlaybackState/ {blk=blk"\n"$0}
@@ -88,7 +64,6 @@ while true; do
   ARTIST=$(printf '%s' "$DESC" | cut -d, -f2 | sed 's/^ *//;s/ *$//')
   [[ -n "$TITLE" && "$TITLE" != "null" ]] || { sleep "$INTERVAL"; continue; }
 
-  # position مربوط به لحظه‌ی updated است؛ تا الان جلو رفته
   NOW_ELAPSED=$(adb shell "awk '{print int(\$1*1000)}' /proc/uptime" 2>/dev/null | tr -d '\r')
   if [[ -n "$UPD" && -n "$NOW_ELAPSED" ]]; then
     POS=$(awk -v p="$POS" -v u="$UPD" -v n="$NOW_ELAPSED" -v s="$SPEED" \

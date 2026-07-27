@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""
-ساختِ StringSession برای تلگرام.
-
-بدون آرگومان: رشته را چاپ می‌کند تا خودت توی config.toml بگذاری.
-با «--write مسیرِ config.toml»: بعد از لاگین، api_id و api_hash و session
-را مستقیم توی همان فایل می‌نویسد (اینستالر همین‌طوری صدایش می‌زند).
-
-⚠️ آن رشته کلیدِ کاملِ اکانتت است. هر کسی داشته باشد وارد اکانتت می‌شود.
-   جایی نفرست، توی گیت کامیت نکن.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -22,13 +11,13 @@ try:
     from telethon import TelegramClient
     from telethon.sessions import StringSession
 except ImportError:
-    print("اول نصب کن:  pip install -r requirements.txt", file=sys.stderr)
+    print("Install dependencies first:  pip install -r requirements.txt", file=sys.stderr)
     raise SystemExit(1)
 
-try:  # py3.11+
+try:
     import tomllib
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
 def _ask(label: str, cast=str):
@@ -39,11 +28,10 @@ def _ask(label: str, cast=str):
         try:
             return cast(v)
         except ValueError:
-            print("  مقدار نامعتبر، دوباره.")
+            print("  invalid value, try again.")
 
 
 def _read_existing(cfg_path: Path) -> tuple[int, str]:
-    """اگر config از قبل api_id/api_hash دارد، دوباره نپرس."""
     try:
         with open(cfg_path, "rb") as f:
             tg = tomllib.load(f).get("telegram", {})
@@ -53,7 +41,6 @@ def _read_existing(cfg_path: Path) -> tuple[int, str]:
 
 
 def _patch(cfg_path: Path, api_id: int, api_hash: str, session: str) -> bool:
-    """api_id / api_hash / session را توی همان config.toml بنویس."""
     text = cfg_path.read_text(encoding="utf-8")
     repl = {
         "api_id": str(api_id),
@@ -70,32 +57,34 @@ def _patch(cfg_path: Path, api_id: int, api_hash: str, session: str) -> bool:
 
 
 async def main() -> None:
-    ap = argparse.ArgumentParser("login.py", description="ساخت سشن تلگرام برای tglyrics")
+    ap = argparse.ArgumentParser(
+        "login.py", description="Create a Telegram StringSession for tglyrics"
+    )
     ap.add_argument(
         "--write", metavar="CONFIG", default="",
-        help="بعد از لاگین، api_id/api_hash/session را مستقیم توی این فایل بنویس",
+        help="after login, write api_id/api_hash/session into this config.toml",
     )
     args = ap.parse_args()
 
     cfg_path = Path(args.write).expanduser() if args.write else None
     if cfg_path and not cfg_path.is_file():
-        print(f"فایل کانفیگ پیدا نشد: {cfg_path}", file=sys.stderr)
+        print(f"config file not found: {cfg_path}", file=sys.stderr)
         raise SystemExit(1)
 
     print(
         "\n"
-        "──────────────────────────────────────────────\n"
-        " ساخت سشن تلگرام برای tglyrics\n"
-        "──────────────────────────────────────────────\n"
-        " اگر api_id و api_hash نداری، برو به my.telegram.org\n"
-        " → API development tools → یک اپ بساز.\n"
+        "------------------------------------------------\n"
+        " Telegram login for tglyrics\n"
+        "------------------------------------------------\n"
+        " No api_id/api_hash yet? Get them at my.telegram.org\n"
+        " -> API development tools -> create an app.\n"
     )
 
     api_id, api_hash = 0, ""
     if cfg_path:
         api_id, api_hash = _read_existing(cfg_path)
         if api_id and api_hash:
-            print(f" api_id و api_hash از کانفیگ برداشته شد ({api_id}).\n")
+            print(f" Using api_id/api_hash already in the config ({api_id}).\n")
     if not api_id:
         api_id = _ask("api_id  : ", int)
     if not api_hash:
@@ -104,30 +93,28 @@ async def main() -> None:
     async with TelegramClient(StringSession(), api_id, api_hash) as client:
         me = await client.get_me()
         s = client.session.save()
+        premium = "yes (140-char bio)" if getattr(me, "premium", False) else "no (70-char bio)"
         print(
-            "\n✅ انجام شد.\n"
-            f"   وارد شدی به‌عنوان: {me.first_name or ''} "
-            f"(@{me.username or '—'})\n"
-            f"   پریمیوم: {'بله (۱۴۰ کاراکتر)' if getattr(me, 'premium', False) else 'نه (۷۰ کاراکتر)'}\n"
+            "\nOK — logged in.\n"
+            f"   account : {me.first_name or ''} (@{me.username or '-'})\n"
+            f"   premium : {premium}\n"
         )
 
         if cfg_path and _patch(cfg_path, api_id, api_hash, s):
-            print(
-                f"✍️  api_id و api_hash و session توی {cfg_path} نوشته شد.\n"
-                "⚠️  توی تلگرام → Settings → Devices این دستگاه را Terminate نکن.\n"
-            )
+            print(f"Wrote api_id, api_hash and session into {cfg_path}")
+            print("Do NOT terminate this device in Telegram -> Settings -> Devices.\n")
             return
         if cfg_path:
-            print("! ساختار کانفیگ ناآشنا بود — خودت دستی بگذار:", file=sys.stderr)
+            print("unrecognized config layout — add these lines yourself:", file=sys.stderr)
 
         print(
-            "این‌ها را توی config.toml زیر [telegram] بگذار:\n"
-            "──────────────────────────────────────────────\n"
+            "Put these under [telegram] in config.toml:\n"
+            "------------------------------------------------\n"
             f"api_id  = {api_id}\n"
             f'api_hash = "{api_hash}"\n'
             f'session = "{s}"\n'
-            "──────────────────────────────────────────────\n"
-            "⚠️  با هیچ‌کس شریکش نکن.\n"
+            "------------------------------------------------\n"
+            "The session string is the FULL key to your account. Never share it.\n"
         )
 
 

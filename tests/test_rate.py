@@ -1,10 +1,3 @@
-"""
-تست محدودکننده‌ی نرخ — با ساعتِ ساختگی، بدون شبکه.
-
-این بخش تنها جایی است که می‌تواند به اکانت واقعی آسیب بزند، پس رفتارش
-باید دقیقاً همان چیزی باشد که ادعا می‌کنیم.
-"""
-
 from __future__ import annotations
 
 import json
@@ -63,7 +56,6 @@ class TestBasics(unittest.TestCase):
             self.assertTrue(lim.ready())
             lim.on_success(0.05)
             c.advance(1.0)
-        # پنج‌تا در ۵ ثانیه نوشتیم؛ ششمی باید تا ۶۰ ثانیه بعدِ اولی صبر کند
         self.assertFalse(lim.ready())
         self.assertAlmostEqual(lim.ready_in(), 55.0, places=3)
         c.advance(55.1)
@@ -126,13 +118,13 @@ class TestFlood(unittest.TestCase):
             c, min_interval=4.0, hard_floor=2.0, recover_after=3,
             recover_factor=0.5, backoff_factor=2.0, max_writes_per_minute=0,
         )
-        lim.on_flood(1)              # 8.0
+        lim.on_flood(1)
         c.advance(10); lim.on_success(0.05)
         c.advance(10); lim.on_success(0.05)
-        lim.on_flood(1)              # 16.0، شمارنده صفر شد
+        lim.on_flood(1)
         self.assertEqual(lim.interval, 16.0)
         c.advance(20); lim.on_success(0.05)
-        self.assertEqual(lim.interval, 16.0)  # هنوز به ۳ تا نرسیده
+        self.assertEqual(lim.interval, 16.0)
 
 
 class TestLead(unittest.TestCase):
@@ -197,7 +189,6 @@ class TestPersistence(unittest.TestCase):
 
 class TestNoStarvation(unittest.TestCase):
     def test_ready_in_always_finite_and_shrinking(self):
-        """هیچ ترکیبی نباید باعث شود برای همیشه اجازه‌ی نوشتن ندهد."""
         c = FakeClock()
         lim = mk(c, min_interval=4.0, max_writes_per_minute=3)
         lim.on_success(0.1)

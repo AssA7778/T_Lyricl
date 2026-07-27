@@ -1,38 +1,3 @@
-"""
-منبع وب‌هوک — دستگاهِ پخش‌کننده خودش خبر می‌دهد.
-
-این دقیق‌ترین راهِ ممکن است، و برخلاف چیزی که به‌نظر می‌رسد از Spotify Web API
-هم دقیق‌تر است: اسپاتیفای `progress_ms` را با ۰.۵ تا ۱.۵ ثانیه تأخیرِ تصادفی
-می‌دهد (باگ شناخته‌شده و حل‌نشده)، ولی `video.currentTime` مرورگر و
-`PlaybackState.getPosition()` اندروید مقدار واقعیِ خودِ پلیرند.
-
-جبران تأخیر شبکه
-────────────────
-یک هماهنگ‌سازیِ ساعتِ سبک به سبک NTP داریم. کلاینت چند بار `GET /time` می‌زند و
-اختلافِ ساعتش با سرور را حساب می‌کند، بعد موقع ارسال می‌گوید «این عدد را در
-فلان لحظه‌ی *ساعتِ تو* گرفتم». سرور تفاضل را به‌عنوان تأخیر به موقعیت اضافه
-می‌کند. نتیجه: چند میلی‌ثانیه خطا، نه چند صد میلی‌ثانیه.
-
-پروتکل
-──────
-GET  /time     → {"server_ms": 1690000000000}
-POST /ingest   → بدنه‌ی JSON (پایین)
-GET  /ingest   → همان با پارامترهای کوئری (برای اسکریپت‌های ساده / curl)
-GET  /health   → {"ok": true}
-
-بدنه:
-{
-  "token": "...",                  یا هدر  Authorization: Bearer ...
-  "event": "state" | "heartbeat" | "stop",
-  "title": "...", "artist": "...", "album": "...",
-  "duration_ms": 214000,
-  "position_ms": 41230,
-  "playing": true,
-  "rate": 1.0,
-  "captured_at_server_ms": 1690000000123   (اختیاری ولی توصیه‌شده)
-}
-"""
-
 from __future__ import annotations
 
 import hmac
@@ -101,7 +66,6 @@ class WebhookSource(Source):
         self.last_seen: float = 0.0
         self.last_agent: str = ""
 
-    # ── سرور ─────────────────────────────────────────────────────
     async def start(self) -> None:
         if not self.token or self.token == "CHANGE_ME_TO_SOMETHING_LONG":
             log.warning(
@@ -133,7 +97,6 @@ class WebhookSource(Source):
     def describe(self) -> str:
         return f"webhook :{self.port}"
 
-    # ── هندلرها ──────────────────────────────────────────────────
     @staticmethod
     def _cors(resp: web.Response) -> web.Response:
         resp.headers["Access-Control-Allow-Origin"] = "*"
@@ -165,7 +128,7 @@ class WebhookSource(Source):
         if self.status_provider:
             try:
                 data = self.status_provider() or {}
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 data = {"error": str(e)}
         snap = self.clock.snapshot()
         data.setdefault("playback", {
@@ -192,7 +155,7 @@ class WebhookSource(Source):
         if req.method == "POST":
             try:
                 body = await req.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 body = {}
             if not isinstance(body, dict):
                 body = {}
@@ -211,11 +174,9 @@ class WebhookSource(Source):
 
         title = _s(merged, "title", "track", "name")
         if not title:
-            # ضربان بدون متادیتا — فقط زنده‌بودن دستگاه را اعلام می‌کند
             self.clock.touch()
             return self._cors(web.json_response({"ok": True, "noop": True}))
 
-        # تأخیر شبکه
         latency_ms = 0.0
         cap = _f(merged, "captured_at_server_ms", default=0.0)
         if cap > 0:

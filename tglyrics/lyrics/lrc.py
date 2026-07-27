@@ -1,17 +1,3 @@
-"""
-پارسر LRC — هم خطی (استاندارد) و هم کلمه‌ای (Enhanced / A2).
-
-نمونه‌ی خطی:
-    [00:12.34]شب که می‌شه دلم می‌گیره
-
-نمونه‌ی کلمه‌ای:
-    [00:12.34]<00:12.34>شب <00:12.80>که <00:13.10>می‌شه
-
-قرارداد offset در این پروژه:
-    زمانِ جستجو = موقعیتِ پخش + offset
-یعنی offset مثبت ⇒ لیریک زودتر نشان داده می‌شود.
-"""
-
 from __future__ import annotations
 
 import re
@@ -30,13 +16,11 @@ _WS = re.compile(r"[ \t ]+")
 def _ms(mm: str, ss: str, frac: Optional[str]) -> int:
     v = int(mm) * 60_000 + int(ss) * 1000
     if frac:
-        # ".5" → 500ms ، ".50" → 500ms ، ".500" → 500ms
         v += int(frac.ljust(3, "0")[:3])
     return v
 
 
 def _clean(s: str) -> str:
-    """تلگرام توی بیو اجازه‌ی newline نمی‌دهد؛ ضمناً فاصله‌ها را جمع می‌کنیم."""
     s = s.replace("​", "").replace("\r", "")
     s = _WS.sub(" ", s)
     return s.strip()
@@ -68,7 +52,6 @@ class Line:
 class Lyrics:
     lines: tuple[Line, ...] = ()
     synced: bool = False
-    #: میلی‌ثانیه‌ای که باید به موقعیتِ پخش اضافه شود
     offset_ms: int = 0
     source: str = ""
     instrumental: bool = False
@@ -83,7 +66,6 @@ class Lyrics:
         return any(l.words for l in self.lines)
 
     def index_at(self, t_ms: float) -> int:
-        """اندیس خطِ فعال در زمان t. اگر هنوز به خط اول نرسیده‌ایم ‎-1."""
         lines = self.lines
         if not lines or t_ms < lines[0].t_ms:
             return -1
@@ -118,10 +100,8 @@ def _finalize(
     *,
     tail_ms: int = 6000,
 ) -> tuple[Line, ...]:
-    """مرتب‌سازی، حذف تکراری‌ها، و پر کردن end_ms هر خط."""
     lines.sort(key=lambda l: l.t_ms)
 
-    # اگر دو خط دقیقاً هم‌زمان بودند، متنشان را با فاصله بچسبان
     merged: list[Line] = []
     for ln in lines:
         if merged and merged[-1].t_ms == ln.t_ms:
@@ -154,12 +134,6 @@ def parse_lrc(
     duration_ms: int = 0,
     source: str = "",
 ) -> Lyrics:
-    """
-    متن LRC را می‌گیرد و `Lyrics` می‌دهد.
-
-    اگر هیچ تگ زمانی نداشت، `synced=False` برمی‌گردد و خطوط با زمان ۰
-    پر می‌شوند (برای اینکه لااقل بشود fallback نشان داد).
-    """
     if not raw:
         return Lyrics(source=source)
 
@@ -187,13 +161,11 @@ def parse_lrc(
                 plain.append(t)
             continue
 
-        # هر چیزی بعد از آخرین تگِ زمانیِ ابتدای خط، متن است
         body = raw_line[stamps[-1].end():]
 
         words: list[Word] = []
         for wm in _WORD.finditer(body):
             wt = _ms(wm.group(1), wm.group(2), wm.group(3))
-            # متن این کلمه = تا تگ بعدی
             nxt = _WORD.search(body, wm.end())
             chunk = body[wm.end(): nxt.start() if nxt else len(body)]
             chunk = _clean(chunk)
@@ -204,7 +176,6 @@ def parse_lrc(
 
         for sm in stamps:
             t_ms = _ms(sm.group(1), sm.group(2), sm.group(3))
-            # وقتی یک خط چند تایم‌استمپ دارد، تایمِ کلمات را جابه‌جا کن
             if words:
                 delta = t_ms - words[0].t_ms
                 shifted = tuple(Word(w.t_ms + delta, w.text) for w in words)
@@ -222,7 +193,6 @@ def parse_lrc(
         )
 
     if plain:
-        # لیریک بدون زمان — فقط برای fallback
         step = max(1, (duration_ms or len(plain) * 3000) // max(1, len(plain)))
         lines = [Line(i * step, t) for i, t in enumerate(plain)]
         return Lyrics(

@@ -1,29 +1,3 @@
-"""
-محدودکننده‌ی نرخِ تطبیقی — بخشِ ریسکیِ پروژه، جدا و قابل‌تست.
-
-چرا جداست: منطقش هیچ ربطی به تلگرام ندارد و باید بتوان بدون شبکه، بدون
-اکانت، و با ساعتِ ساختگی تستش کرد. حدس زدن در این بخش گران تمام می‌شود.
-
-مسئله
-─────
-تلگرام هیچ عددی برای نرخِ مجازِ `account.updateProfile` منتشر نکرده و
-صریحاً می‌گوید محدودیت‌های سمت سرور قابل پیش‌بینی نیستند. ضمناً شمارنده‌ی
-۴۲۰ روی «متد + همان پارامترها» کلید می‌خورد، پس نوشتنِ بی‌تغییر هم خرج دارد
-و باید سمتِ خودمان حذف شود.
-
-راهبرد
-──────
-عدد را حدس نزن، یاد بگیر:
-
-  • با یک فاصله‌ی محافظه‌کارانه شروع کن
-  • FLOOD_WAIT ⇒ همان‌قدر که گفت بخواب + فاصله را نمایی ببر بالا
-  • بعد از یک دوره‌ی آرام، آرام برگرد پایین (ولی هرگز زیر `hard_floor`)
-  • مقدار یادگرفته را روی دیسک نگه دار
-
-بعلاوه یک سقفِ سختِ «حداکثر N نوشتن در هر ۶۰ ثانیه» به‌عنوان کمربند ایمنی،
-که مستقل از یادگیری عمل می‌کند.
-"""
-
 from __future__ import annotations
 
 import json
@@ -68,11 +42,10 @@ class AdaptiveLimiter:
         self._last_write = float("-inf")
         self._blocked_until = float("-inf")
         self._window: deque[float] = deque()
-        self._latency = 0.25          # میانگین متحرکِ تأخیرِ نوشتن (ثانیه)
+        self._latency = 0.25
         if load:
             self.load()
 
-    # ── مقادیر ───────────────────────────────────────────────────
     @property
     def interval(self) -> float:
         return self._interval
@@ -83,18 +56,11 @@ class AdaptiveLimiter:
 
     @property
     def lead(self) -> float:
-        """
-        چقدر زودتر بفرستیم که دقیقاً سرِ وقت روی سرور بنشیند.
-
-        سقف ۰.۶ ثانیه دارد تا اگر شبکه یک لحظه خراب شد، لیریک ناگهان
-        چند ثانیه جلو نیفتد.
-        """
         return min(0.6, max(0.0, self._latency * 0.9))
 
     def floor(self) -> float:
         return max(self.cfg.hard_floor, self.cfg.min_interval)
 
-    # ── زمان‌بندی ────────────────────────────────────────────────
     def _trim(self, now: float) -> None:
         while self._window and now - self._window[0] > 60.0:
             self._window.popleft()
@@ -116,7 +82,6 @@ class AdaptiveLimiter:
     def ready(self, now: Optional[float] = None) -> bool:
         return self.ready_in(now) <= 0.0
 
-    # ── بازخورد ──────────────────────────────────────────────────
     def on_success(self, latency_s: float = 0.0, now: Optional[float] = None) -> None:
         now = self._now() if now is None else now
         if latency_s > 0:
@@ -154,11 +119,9 @@ class AdaptiveLimiter:
         self.save()
 
     def on_error(self, now: Optional[float] = None) -> None:
-        """خطای گذرا (شبکه و…): فقط کمی صبر، بدون عقب‌نشینیِ نرخ."""
         now = self._now() if now is None else now
         self._blocked_until = max(self._blocked_until, now + 1.0)
 
-    # ── ماندگاری ─────────────────────────────────────────────────
     def load(self) -> None:
         try:
             with open(self.cfg.state_file, encoding="utf-8") as f:

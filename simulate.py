@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""
-شبیه‌ساز — بدون اینکه به تلگرام دست بزند، دقیقاً همان چیزی را که قرار است
-توی بیو بنویسد، توی ترمینال نشان می‌دهد.
-
-قبل از اینکه اکانتت را درگیر کنی این را اجرا کن. سه چیز را جواب می‌دهد:
-
-  ۱. اصلاً برای این آهنگ لیریک سینک‌شده هست؟
-  ۲. با سقفِ ۷۰ کاراکتر چه شکلی در می‌آید؟
-  ۳. **دقیقاً چند بار در دقیقه باید بیو را عوض کند؟**  ← مهم‌ترین عدد
-
-مثال:
-    python simulate.py "Mohsen Yeganeh" "Behet Ghol Midam"
-    python simulate.py "Radiohead" "Creep" --duration 239 --speed 8
-    python simulate.py "Sirvan Khosravi" "Dust Daram Zendegi Ro" --from 45
-"""
 
 from __future__ import annotations
 
@@ -134,7 +119,6 @@ async def main() -> int:
                 await asyncio.sleep(delay)
         pos = nxt
 
-    # ── آمار ─────────────────────────────────────────────────────
     total_min = max(1e-9, (dur_ms - a.start * 1000.0) / 60000.0)
     avg = writes / total_min
 

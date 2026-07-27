@@ -1,5 +1,3 @@
-"""تست انبار — کش SQLite و فایل‌های دستی."""
-
 from __future__ import annotations
 
 import os
@@ -36,7 +34,6 @@ class TestCache(Base):
 
     def test_duration_bucketing_tolerates_jitter(self):
         self.s.put("k", 200000, "x", "s", True)
-        # نوسانِ چند صد میلی‌ثانیه‌ایِ پلیر نباید کش را بی‌اثر کند
         self.assertIsNotNone(self.s.get("k", 200400))
         self.assertIsNotNone(self.s.get("k", 199600))
 
@@ -92,7 +89,6 @@ class TestKV(Base):
         self.assertEqual(self.s.kv_get("bio"), "سلام")
 
     def test_empty_string_is_not_none(self):
-        """فرقِ «بیوی خالی» و «هنوز ذخیره نشده» برای بازیابی حیاتی است."""
         self.s.kv_set("bio", "")
         self.assertEqual(self.s.kv_get("bio"), "")
         self.assertIsNotNone(self.s.kv_get("bio"))
@@ -103,8 +99,6 @@ class TestLocalFiles(Base):
         p = os.path.join(self.lyrics_dir, name)
         with open(p, "w", encoding="utf-8") as f:
             f.write(body)
-        # ایندکس بر اساس mtime پوشه رفرش می‌شود — و ساختِ فایل ممکن است با
-        # open() توی یک تیکِ ساعت بیفتد و mtime عوض نشود؛ قطعی جلو ببرش.
         st = os.stat(self.lyrics_dir)
         os.utime(self.lyrics_dir, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
         return p
@@ -128,8 +122,8 @@ class TestLocalFiles(Base):
         self.assertIsNotNone(self.s.local("محسن یگانه", "بهت قول میدم"))
 
     def test_arabic_yeh_in_filename_still_matches(self):
-        self.write("بيا.lrc")   # با «ي» عربی
-        self.assertIsNotNone(self.s.local("", "بیا"))  # با «ی» فارسی
+        self.write("بيا.lrc")
+        self.assertIsNotNone(self.s.local("", "بیا"))
 
     def test_unknown_returns_none(self):
         self.write("Creep.lrc")

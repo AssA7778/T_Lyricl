@@ -1,11 +1,3 @@
-"""
-تست نویسنده‌ی بیو با کلاینتِ ساختگی — بدون شبکه، بدون اکانت واقعی.
-
-اینجا رفتار در برابر خطاهای تلگرام تست می‌شود: FLOOD_WAIT، بیوی بلندتر از
-سقف، و قطعی شبکه. اگر این‌ها درست هندل نشوند، یا اکانت محدود می‌شود یا
-لیریک بی‌صدا قطع می‌شود.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +8,7 @@ from types import SimpleNamespace
 try:
     from telethon.errors import FloodWaitError, RPCError
     HAVE_TELETHON = True
-except ImportError:  # pragma: no cover
+except ImportError:
     HAVE_TELETHON = False
 
 if HAVE_TELETHON:
@@ -30,9 +22,8 @@ logging.getLogger("tglyrics.rate").setLevel(logging.CRITICAL)
 if HAVE_TELETHON:
 
     class AboutTooLong(RPCError):
-        """ادای AboutTooLongError تلگرام (که زیرکلاسِ RPCError است)."""
 
-        def __init__(self) -> None:  # noqa: D107
+        def __init__(self) -> None:
             pass
 
         def __str__(self) -> str:
@@ -40,10 +31,6 @@ if HAVE_TELETHON:
 
 
 class FakeClient:
-    """
-    فقط سه درخواستی که BioWriter می‌زند را می‌فهمد.
-    `script` صفی از استثناهاست؛ هر None یعنی موفق.
-    """
 
     def __init__(self, bio: str = "بیوی اصلی", premium: bool = False):
         self.bio = bio
@@ -88,11 +75,10 @@ class TestWriter(unittest.TestCase):
         run(w.start())
         return w, c
 
-    # ── راه‌اندازی ───────────────────────────────────────────────
     def test_start_reads_bio_and_limit(self):
         w, _ = self.mk()
         self.assertEqual(w.original_bio, "بیوی اصلی")
-        self.assertEqual(w.limit, 70)      # غیرپریمیوم
+        self.assertEqual(w.limit, 70)
         self.assertFalse(w.premium)
 
     def test_premium_default_limit(self):
@@ -107,7 +93,6 @@ class TestWriter(unittest.TestCase):
         run(w.start(forced_limit=55))
         self.assertEqual(w.limit, 55)
 
-    # ── نوشتن ────────────────────────────────────────────────────
     def test_basic_write(self):
         w, c = self.mk()
         self.assertTrue(run(w.write("خط اول")))
@@ -115,7 +100,6 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(w.current, "خط اول")
 
     def test_duplicate_is_never_sent(self):
-        """شمارنده‌ی فلاد تلگرام روی «متد + پارامتر» است — تکراری هم خرج دارد."""
         w, c = self.mk()
         run(w.write("یکسان"))
         for _ in range(5):
@@ -149,14 +133,13 @@ class TestWriter(unittest.TestCase):
         self.assertTrue(run(w.write("دو", force=True)))
         self.assertEqual(c.written, ["یک", "دو"])
 
-    # ── خطاها ────────────────────────────────────────────────────
     def test_flood_backs_off_and_does_not_commit(self):
         w, c = self.mk(min_interval=2.0, hard_floor=2.0, backoff_factor=2.0)
         before = w.interval
         c.script = [FloodWaitError(None, capture=25)]
         self.assertFalse(run(w.write("خط")))
         self.assertEqual(c.written, [])
-        self.assertNotEqual(w.current, "خط")     # نباید فکر کند نوشته شده
+        self.assertNotEqual(w.current, "خط")
         self.assertEqual(w.interval, before * 2)
         self.assertGreater(w.ready_in(), 24.0)
 
@@ -166,7 +149,6 @@ class TestWriter(unittest.TestCase):
         text = "y" * 70
         self.assertFalse(run(w.write(text)))
         self.assertLess(w.limit, 70)
-        # دفعه‌ی بعد با سقف جدید می‌رود
         self.assertTrue(run(w.write(text)))
         self.assertLessEqual(len(c.written[-1]), w.limit)
 
@@ -183,7 +165,6 @@ class TestWriter(unittest.TestCase):
         self.assertFalse(run(w.write("ب")))
         self.assertEqual(w.current, "بیوی اصلی")
 
-    # ── بازگردانی ────────────────────────────────────────────────
     def test_restore_puts_original_back(self):
         w, c = self.mk()
         run(w.write("لیریک"))
@@ -197,7 +178,6 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(len(c.written), n)
 
     def test_set_original_recovers_after_crash(self):
-        """اگر دفعه‌ی قبل وسط لیریک کرش کرده باشیم، اصل از دیتابیس می‌آید."""
         c = FakeClient(bio="یه خط لیریک که از قبل مونده")
         w = BioWriter(c, RateConfig(state_file=""))
         run(w.start())
@@ -206,7 +186,6 @@ class TestWriter(unittest.TestCase):
         run(w.restore())
         self.assertEqual(c.written[-1], "بیوی واقعی من")
 
-    # ── آمار ─────────────────────────────────────────────────────
     def test_stats_shape(self):
         w, _ = self.mk()
         run(w.write("z"))

@@ -1,25 +1,3 @@
-"""
-رندرر — از «لیریک + لحظه» به «متنی که باید توی بیو باشد».
-
-مسئله‌ی اصلی: بیوی اکانت معمولی ۷۰ کاراکتر است و خیلی از خط‌های لیریک
-بلندترند. سه راه داشتیم:
-
-  ۱. بریدن با …            → نصف خط را نمی‌بینی
-  ۲. کوچک‌کردن فونت        → وجود ندارد
-  ۳. اسکرول سینک‌شده       ← این را پیاده کردیم
-
-در حالت «chunk» خط بلند به تیکه‌های ≤ سقف شکسته می‌شود و تیکه‌ها *روی
-زمانِ خودِ خط* پخش می‌شوند. اگر لیریک کلمه‌ای (A2) باشد، مرزِ هر تیکه دقیقاً
-روی تایم‌استمپِ اولین کلمه‌اش می‌نشیند — یعنی همان لحظه‌ای که خواننده آن
-کلمه را می‌خواند. اگر نباشد، به‌تناسبِ طولِ متن تقسیم می‌شود.
-
-`min_chunk_ms` جلوی انفجارِ تعداد نوشتن را می‌گیرد: اگر خط آن‌قدر کوتاه است
-که تیکه‌ها کمتر از این مدت دیده می‌شوند، تعداد تیکه‌ها کم می‌شود.
-
-هر فریم علاوه بر متن، می‌گوید «تا کِی معتبر است» — زمان‌بند دقیقاً همان لحظه
-بیدار می‌شود، نه یک ثانیه دیرتر.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -38,7 +16,6 @@ def _len(s: str) -> int:
 
 
 def fit(text: str, limit: int) -> str:
-    """متن را در سقف جا بده؛ ترجیحاً روی مرز کلمه."""
     text = text.strip()
     if limit <= 0:
         return ""
@@ -48,14 +25,12 @@ def fit(text: str, limit: int) -> str:
         return text[:limit]
     cut = text[: limit - 1].rstrip()
     sp = cut.rfind(" ")
-    # فقط اگر بریدنِ روی کلمه بیش از حد کوتاهش نکند
     if sp >= limit * 0.55:
         cut = cut[:sp].rstrip()
     return (cut + ELLIPSIS) if cut else text[:limit]
 
 
 def split_to_pieces(text: str, budget: int) -> list[str]:
-    """متن را حریصانه به تیکه‌های ≤ budget بشکن، روی مرز کلمه."""
     if budget <= 0:
         return [""]
     text = text.strip()
@@ -67,7 +42,6 @@ def split_to_pieces(text: str, budget: int) -> list[str]:
     pieces: list[str] = []
     cur = ""
     for w in text.split():
-        # کلمه‌ی تک‌تنهایی که از سقف بلندتر است → سخت بشکن
         while _len(w) > budget:
             if cur:
                 pieces.append(cur)
@@ -90,7 +64,7 @@ def split_to_pieces(text: str, budget: int) -> list[str]:
 class RenderConfig:
     limit: int = 70
     prefix: str = ""
-    long_line_mode: str = "chunk"          # chunk | truncate
+    long_line_mode: str = "chunk"
     min_chunk_ms: int = 1300
     interlude: str = "♪"
     show_interlude: bool = True
@@ -103,16 +77,14 @@ class RenderConfig:
 @dataclass(frozen=True)
 class Frame:
     text: str
-    #: زمانِ پخش (میلی‌ثانیه) که این فریم منقضی می‌شود. None = نامحدود
     until_ms: Optional[float]
-    kind: str = "lyric"  # lyric | interlude | track | idle
+    kind: str = "lyric"
 
 
 class Renderer:
     def __init__(self, cfg: RenderConfig) -> None:
         self.cfg = cfg
 
-    # ── سقف ──────────────────────────────────────────────────────
     @property
     def limit(self) -> int:
         return self.cfg.limit
@@ -129,7 +101,6 @@ class Renderer:
         p = self.cfg.prefix
         return f"{p}{body}" if p else body
 
-    # ── فریم‌های غیرلیریکی ───────────────────────────────────────
     def _track_frame(self, track: Optional[Track], until: Optional[float]) -> Frame:
         cfg = self.cfg
         if not cfg.fallback_to_track or track is None or not track.ok:
@@ -145,18 +116,12 @@ class Renderer:
     def idle(self) -> Frame:
         return Frame(self.cfg.idle_text, None, "idle")
 
-    # ── هسته ─────────────────────────────────────────────────────
     def render(
         self,
         lyrics: Optional[Lyrics],
         track: Optional[Track],
         t_ms: float,
     ) -> Frame:
-        """
-        متنی که همین الان باید توی بیو باشد + لحظه‌ی انقضایش.
-
-        `t_ms` باید *بعد از* اعمال offset باشد.
-        """
         cfg = self.cfg
 
         if not lyrics or not lyrics.lines or not lyrics.synced:
@@ -164,7 +129,6 @@ class Renderer:
 
         idx = lyrics.index_at(t_ms)
         if idx < 0:
-            # هنوز مقدمه است
             return self._track_frame(track, float(lyrics.lines[0].t_ms))
 
         line = lyrics.lines[idx]
@@ -179,7 +143,6 @@ class Renderer:
         sing_end = self._sing_end(line)
 
         if t_ms >= sing_end:
-            # خط تمام شده ولی خط بعدی هنوز نیامده → بین‌نوا
             if cfg.show_interlude:
                 return Frame(self._wrap(cfg.interlude), float(line.end_ms), "interlude")
             return Frame("", float(line.end_ms), "interlude")
@@ -190,14 +153,7 @@ class Renderer:
 
         return Frame(self._wrap(fit(line.text, self.budget)), float(sing_end), "lyric")
 
-    # ── جزئیات ───────────────────────────────────────────────────
     def _sing_end(self, line: Line) -> int:
-        """
-        کِی خواندنِ این خط تمام می‌شود (نه کِی خط بعدی شروع می‌شود).
-
-        فرقشان مهم است: بین دو خط ممکن است ۲۰ ثانیه ساز باشد و ما نمی‌خواهیم
-        ۲۰ ثانیه خطِ قبلی توی بیو بماند.
-        """
         cfg = self.cfg
         if line.words:
             natural = line.words[-1].t_ms + 1200
@@ -213,7 +169,6 @@ class Renderer:
         return natural
 
     def _token_times(self, line: Line) -> Optional[list[int]]:
-        """زمانِ هر توکنِ متن. None اگر نتوانستیم مطمئن هم‌ترازش کنیم."""
         if not line.words:
             return None
         times: list[int] = []
@@ -225,7 +180,6 @@ class Renderer:
         return times if len(times) == len(line.text.split()) else None
 
     def _pieces(self, line: Line, sing_end: int) -> list[tuple[str, int, int]]:
-        """(متن، شروع، پایان) برای هر تیکه‌ی این خط."""
         cfg = self.cfg
         budget = self.budget
         text = line.text
@@ -255,13 +209,6 @@ class Renderer:
     def _piece_bounds(
         self, line: Line, pieces: list[str], start: int, end: int
     ) -> list[int]:
-        """
-        مرزهای زمانی تیکه‌ها: n+1 عدد، اکیداً صعودی، اولی `start`، آخری `end`.
-
-        اگر لیریک کلمه‌ای باشد مرزها روی تایم‌استمپِ خودِ کلمه می‌نشینند
-        (یعنی همان لحظه‌ای که خواننده آن کلمه را می‌خواند). وگرنه به‌تناسبِ
-        طولِ متن تقسیم می‌شود.
-        """
         n = len(pieces)
         bounds: Optional[list[int]] = None
         times = self._token_times(line)
@@ -294,14 +241,11 @@ class Renderer:
 
     @staticmethod
     def _normalize(bounds: list[int], start: int, end: int) -> list[int]:
-        """اکیداً صعودی، داخل [start, end]، با انتهای دقیقاً `end`."""
         bounds = list(bounds)
         bounds[0], bounds[-1] = start, end
         n = len(bounds)
-        # از آخر به اول: هیچ مرزی نباید از مرزِ بعدی جلو بزند
         for i in range(n - 2, 0, -1):
             bounds[i] = min(bounds[i], bounds[i + 1] - 1)
-        # از اول به آخر: هیچ مرزی نباید از مرزِ قبلی عقب بماند
         for i in range(1, n - 1):
             bounds[i] = max(bounds[i], bounds[i - 1] + 1)
             bounds[i] = min(bounds[i], end - 1)

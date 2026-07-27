@@ -1,20 +1,3 @@
-"""
-ارکستراتور — همه‌چیز اینجا به هم وصل می‌شود.
-
-منطقِ حلقه‌ی اصلی، که کل ادعای «حتی یک ثانیه دیر نمی‌کند» روی آن سوار است:
-
-  ۱. موقعیتِ *همین لحظه* را از ساعتِ درون‌یاب بگیر
-  ۲. یک `lead` جلوتر برو (به اندازه‌ی تأخیرِ اندازه‌گیری‌شده‌ی خودِ تلگرام)،
-     تا درخواست دقیقاً سرِ تایم‌استمپ روی سرور بنشیند نه بعدش
-  ۳. بپرس «الان باید چه متنی باشد و تا کِی معتبر است»
-  ۴. اگر با بیوی فعلی فرق دارد و اجازه‌ی نوشتن داریم → بنویس
-  ۵. دقیقاً سرِ لحظه‌ی انقضای همین فریم بیدار شو، نه یک لحظه دیرتر
-
-و نکته‌ی حیاتی: هیچ صفی در کار نیست. اگر محدودیتِ نرخ اجازه نداد الان
-بنویسیم، وقتی اجازه داد **دوباره از نو حساب می‌کنیم**. یعنی خطِ قدیمی هرگز
-با تأخیر نوشته نمی‌شود؛ از رویش می‌پریم و خطِ همان لحظه می‌رود روی بیو.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -85,8 +68,8 @@ class App:
             StringSession(cfg.telegram.session),
             cfg.telegram.api_id,
             cfg.telegram.api_hash,
-            flood_sleep_threshold=0,   # می‌خواهیم خودمان FLOOD_WAIT را ببینیم
-            connection_retries=None,   # بی‌نهایت — VPS و اینترنت قطع‌وصل می‌شود
+            flood_sleep_threshold=0,
+            connection_retries=None,
             retry_delay=2,
             auto_reconnect=True,
             receive_updates=bool(cfg.telegram.control_chat),
@@ -99,7 +82,6 @@ class App:
         self._frames = 0
         self._me_id: Optional[int] = None
 
-    # ── وضعیت ────────────────────────────────────────────────────
     def status(self) -> dict:
         snap = self.clock.snapshot()
         hit, lyr = (False, None)
@@ -129,7 +111,6 @@ class App:
             },
         }
 
-    # ── اجرا ─────────────────────────────────────────────────────
     async def run(self) -> None:
         self.store.open()
         await self.lyrics.start()
@@ -164,7 +145,6 @@ class App:
             await self._shutdown()
 
     def _resolve_original(self) -> None:
-        """بیوی واقعیِ کاربر را پیدا کن، حتی اگر دفعه‌ی قبل وسط کار کرش کرده باشیم."""
         current = self.writer.original_bio
         stored = self.store.kv_get(KV_ORIGINAL)
         last = self.store.kv_get(KV_LAST)
@@ -173,10 +153,8 @@ class App:
             self.store.kv_set(KV_ORIGINAL, current)
             original = current
         elif last is not None and current == last:
-            # چیزی که الان توی بیو است را خودمان نوشته بودیم
             original = stored
         else:
-            # کاربر خودش بیو را عوض کرده — همان تازه را اصل بگیر
             self.store.kv_set(KV_ORIGINAL, current)
             original = current
 
@@ -198,26 +176,23 @@ class App:
             await self.source.stop()
         try:
             await self.writer.restore()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("برگرداندن بیو نشد: %s", e)
         await self.lyrics.close()
         self.store.close()
         try:
             await self.client.disconnect()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
-    # ── حلقه‌ی اصلی ──────────────────────────────────────────────
     async def _render_loop(self) -> None:
         while not self._stop.is_set():
-            # ترتیب مهم است: اول پرچم را پاک کن، بعد وضعیت را بخوان.
-            # هر تغییری که از این لحظه به بعد برسد، خواب را می‌شکند.
             self.clock.consume()
             try:
                 sleep_for = await self._tick()
             except asyncio.CancelledError:
                 raise
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 log.exception("خطا در حلقه‌ی اصلی: %s", e)
                 sleep_for = 2.0
 
@@ -243,7 +218,6 @@ class App:
         if not hit:
             t = self.lyrics.request(track)
             if t is not None:
-                # به‌محض رسیدنِ لیریک، حلقه را بیدار کن
                 t.add_done_callback(lambda _t: self.clock.changed.set())
             lyr = None
 
@@ -265,7 +239,6 @@ class App:
             max_sleep=MAX_SLEEP,
         )
         if d.write:
-            # موفق شد → فوراً دوباره حساب کن. نشد → کمی صبر، بعد دوباره.
             return 0.0 if await self._write(frame.text) else 0.25
         return d.sleep
 
@@ -274,33 +247,32 @@ class App:
         if ok:
             try:
                 self.store.kv_set(KV_LAST, self.writer.current)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         return ok
 
     def _idle_text(self) -> str:
         return self.cfg.telegram.idle_bio or self.writer.original_bio
 
-    # ── کنترل از داخل تلگرام ─────────────────────────────────────
     def _install_control(self) -> None:
         chat = self.cfg.telegram.control_chat
         if not chat:
             return
         prefix = re.escape(self.cfg.telegram.control_prefix or ".")
-        pat = re.compile(rf"^{prefix}(?:lrc|lyrics|ل)\b\s*(.*)$", re.I | re.S)
+        pat = re.compile(rf"^{prefix}(?:lrc|lyrics|لیریک|ل)\b\s*(.*)$", re.I | re.S)
 
         @self.client.on(events.NewMessage(outgoing=True, pattern=pat))
-        async def _handler(event):  # noqa: ANN001
+        async def _handler(event):
             if chat == "me" and event.chat_id != self._me_id:
                 return
             arg = (event.pattern_match.group(1) or "").strip()
             try:
                 reply = await self._command(arg)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 reply = f"❌ {e}"
             try:
                 await event.edit(reply)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         log.info(
@@ -316,26 +288,42 @@ class App:
         rest = " ".join(parts[1:]).strip()
         snap = self.clock.snapshot()
 
+        if re.fullmatch(r"[+-]?\d+", cmd):
+            cmd, rest = "sync", cmd
+
         if cmd in ("status", "s", ""):
             st = self.status()
             pb, b, ly = st["playback"], st["bio"], st["lyrics"]
-            emoji = "🟢" if self.enabled else "⏸"
-            return (
-                f"{emoji} **tglyrics {st['version']}**\n"
-                f"منبع: `{st['source']}`\n"
-                f"آهنگ: `{pb['track'] or '—'}`\n"
-                f"موقعیت: `{pb['position_ms'] / 1000:.1f}s`"
-                f"{' ▶️' if pb['playing'] else ' ⏸'}"
-                f"{'  ⚠️ قطع' if pb['stale'] else ''}\n"
-                f"لیریک: `{ly['lines']} خط`"
-                f"{' (کلمه‌ای)' if ly['word_level'] else ''}"
-                f"  منبع: `{ly['source'] or '—'}`\n"
-                f"آفست: `{ly['offset_ms']:+d}ms`\n"
-                f"سقف بیو: `{b['limit']}`  |  فاصله: `{b['interval']}s`\n"
-                f"نوشته‌شده: `{b['writes']}`  |  فلاد: `{b['floods']}`"
-                f"  |  تأخیر: `{b['latency_ms']}ms`\n"
-                f"آپ‌تایم: `{st['uptime_s']}s`"
+            up = st["uptime_s"]
+            uptime = (
+                f"{up // 3600}h {(up % 3600) // 60}m"
+                if up >= 3600
+                else f"{up // 60}m {up % 60}s"
             )
+            out = [f"**tglyrics {st['version']}** — " + ("🟢 روشن" if self.enabled else "⏸ خاموش")]
+            if pb["track"]:
+                out.append(
+                    f"🎵 {pb['track']}  `{pb['position_ms'] / 1000:.0f}s` "
+                    + ("▶️" if pb["playing"] else "⏸")
+                )
+                if ly["found"]:
+                    word = " (کلمه‌ای)" if ly["word_level"] else ""
+                    off = f" | آفست `{ly['offset_ms']:+d}ms`" if ly["offset_ms"] else ""
+                    out.append(f"📜 {ly['lines']} خط{word}{off} — `{ly['source']}`")
+                elif ly["resolved"]:
+                    out.append(f"📜 لیریک سینک‌شده نداره — اسم آهنگ نشون داده می‌شه (`{p}lrc reload` = تلاش دوباره)")
+                else:
+                    out.append("📜 در حال جستجوی لیریک…")
+            else:
+                out.append("🎵 هیچی پخش نمی‌شه — یوزراسکریپت مرورگر رو چک کن")
+            if pb["stale"]:
+                out.append(f"⚠️ از دستگاه پخش {pb['age_s']:.0f}s خبری نیست")
+            out.append(
+                f"✍️ نوشته `{b['writes']}` | فلاد `{b['floods']}` | "
+                f"فاصله `{b['interval']}s` | تأخیر `{b['latency_ms']}ms`"
+            )
+            out.append(f"📏 سقف `{b['limit']}` | ⏳ `{uptime}` | راهنما: `{p}lrc help`")
+            return "\n".join(out)
 
         if cmd in ("on", "start", "روشن"):
             self.enabled = True
@@ -345,57 +333,60 @@ class App:
         if cmd in ("off", "stop", "pause", "خاموش"):
             self.enabled = False
             self.clock.changed.set()
-            return "⏸ خاموش شد — بیو برمی‌گردد سر جایش"
+            return "⏸ خاموش شد — بیوی اصلی برگشت"
 
         if cmd in ("sync", "offset", "آفست"):
             if not snap.track:
-                return "الان آهنگی پخش نمی‌شود"
+                return "🎵 الان آهنگی پخش نمی‌شه"
             key = snap.track.key
             if not rest:
-                return f"آفستِ این آهنگ: `{self.store.get_offset(key):+d}ms`"
+                return (
+                    f"⏱ آفست این آهنگ: `{self.store.get_offset(key):+d}ms`\n"
+                    f"جلوتر: `{p}lrc +300` | عقب‌تر: `{p}lrc -250` | صفر: `{p}lrc 0`"
+                )
             m = re.fullmatch(r"([+-]?\d+)(?:\s*ms)?", rest)
             if not m:
-                return f"مثال: `{p}lrc sync +300`  یا  `{p}lrc sync -250`"
+                return f"مثال:  `{p}lrc +300`  یا  `{p}lrc -250`  یا  `{p}lrc 0`"
             delta = int(m.group(1))
             cur = self.store.get_offset(key)
-            new = delta if rest[0] not in "+-" else cur + delta
+            new = cur + delta if rest[0] in "+-" else delta
             self.store.set_offset(key, new)
             self.clock.changed.set()
-            return f"آفستِ «{snap.track}» شد `{new:+d}ms`"
+            return f"⏱ آفست «{snap.track}» شد `{new:+d}ms`"
 
         if cmd in ("reload", "refetch", "دوباره"):
             if not snap.track:
-                return "الان آهنگی پخش نمی‌شود"
-            self.store.forget(snap.track.key)
-            self.lyrics._mem.pop(snap.track.key, None)  # noqa: SLF001
-            if snap.track.key in self.lyrics._order:    # noqa: SLF001
-                self.lyrics._order.remove(snap.track.key)  # noqa: SLF001
+                return "🎵 الان آهنگی پخش نمی‌شه"
+            self.lyrics.forget(snap.track)
             self.clock.changed.set()
-            return "🔄 کش پاک شد، دوباره دنبال لیریک می‌گردم"
+            return "🔄 کش پاک شد — دوباره دنبال لیریک می‌گردم"
 
-        if cmd in ("bio", "idle"):
+        if cmd in ("bio", "idle", "بیو"):
             self.cfg.telegram.idle_bio = rest
             self.renderer.cfg.idle_text = rest
             self.clock.changed.set()
-            return f"بیوی حالتِ بیکار شد: `{rest or '(بیوی اصلی)'}`"
+            return f"💤 بیوی حالت بیکار: {rest or '(بیوی اصلی خودت)'}"
 
         if cmd == "limit":
-            if rest.isdigit():
+            if rest.isdigit() and int(rest) >= 10:
                 self.writer.limit = int(rest)
                 self.renderer.limit = int(rest)
-                return f"سقف بیو دستی شد `{rest}`"
-            return f"سقف فعلی `{self.writer.limit}`"
+                return f"📏 سقف بیو شد `{rest}`"
+            return f"📏 سقف فعلی: `{self.writer.limit}` — تغییر: `{p}lrc limit 70`"
 
         if cmd in ("help", "h", "?", "راهنما"):
             return (
-                f"`{p}lrc`            وضعیت\n"
-                f"`{p}lrc on|off`     روشن/خاموش\n"
-                f"`{p}lrc sync +300`  جلو بردن لیریک (ms)\n"
-                f"`{p}lrc sync -250`  عقب بردن\n"
-                f"`{p}lrc sync 0`     صفر کردن\n"
-                f"`{p}lrc reload`     دوباره دنبال لیریک بگرد\n"
-                f"`{p}lrc bio متن`    بیوی حالت بیکار\n"
-                f"`{p}lrc limit 70`   سقف کاراکتر"
+                f"🎛 **tglyrics**\n"
+                f"`{p}lrc`           وضعیت\n"
+                f"`{p}lrc on`        روشن\n"
+                f"`{p}lrc off`       خاموش — بیوی اصلی برمی‌گرده\n"
+                f"`{p}lrc +300`      لیریک ۳۰۰ms جلوتر (همین آهنگ)\n"
+                f"`{p}lrc -250`      لیریک ۲۵۰ms عقب‌تر\n"
+                f"`{p}lrc 0`         آفست صفر\n"
+                f"`{p}lrc reload`    دوباره دنبال لیریک بگرد\n"
+                f"`{p}lrc bio متن`   بیوی وقتی چیزی پخش نیست\n"
+                f"`{p}lrc limit 70`  سقف کاراکتر بیو\n"
+                f"فارسی هم می‌شه: `{p}لیریک روشن` / `{p}ل خاموش`"
             )
 
-        return f"دستور ناشناخته. `{p}lrc help`"
+        return f"❓ دستور ناشناخته: `{cmd}` — راهنما: `{p}lrc help`"

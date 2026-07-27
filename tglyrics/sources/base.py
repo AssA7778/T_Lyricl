@@ -6,7 +6,6 @@ from ..clock import PlaybackClock
 
 
 class Source(abc.ABC):
-    """منبعِ موقعیتِ پخش. کارش فقط پر کردن `PlaybackClock` است."""
 
     name = "source"
 

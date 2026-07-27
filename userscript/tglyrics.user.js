@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         tglyrics — ارسال موقعیت پخش به سرور
 // @name:en      tglyrics — now-playing bridge
-// @namespace    https://github.com/tglyrics
-// @version      1.0.0
+// @namespace    https://github.com/AssA7778/T_Lyricl
+// @version      1.0.1
 // @description  ثانیه‌ی دقیقِ آهنگی که داری گوش می‌دی رو به سرور tglyrics می‌فرسته تا لیریکش بره توی بیوی تلگرام
+// @description:en  Sends the exact playback position of the current song to your tglyrics server
 // @author       tglyrics
 // @match        https://music.youtube.com/*
 // @match        https://www.youtube.com/*
@@ -21,39 +22,26 @@
 // @noframes
 // ==/UserScript==
 
-/*
- چطور کار می‌کند
- ───────────────
- ۱. ساعتش را با سرور هماهنگ می‌کند (NTP ساده) تا تأخیر شبکه از عدد در بیاید.
- ۲. `currentTime` خودِ پلیر را می‌خواند — این عددِ واقعی است، نه تخمین.
- ۳. فقط وقتی چیزی عوض شود می‌فرستد: پلی/پاز/سیک/آهنگ جدید. بعلاوه هر ۱۰ ثانیه
-    یک ضربان تا سرور بفهمد هنوز زنده‌ای. یعنی ترافیک تقریباً صفر.
-
- راه‌اندازی: روی آیکون افزونه → «⚙️ تنظیم سرور tglyrics»
-*/
-
 (function () {
   'use strict';
 
-  // ──────────────────────────────────────────────────────────────
-  const HEARTBEAT_MS = 10000;   // ضربان
-  const TICK_MS = 500;          // هر چند وقت وضعیت را چک کن (محلی، ارزان)
-  const SEEK_TOLERANCE_MS = 700;// پرشِ بیشتر از این = سیک
-  const RESYNC_MS = 15 * 60000; // هر ۱۵ دقیقه ساعت را دوباره هماهنگ کن
+  const HEARTBEAT_MS = 10000;
+  const TICK_MS = 500;
+  const SEEK_TOLERANCE_MS = 700;
+  const RESYNC_MS = 15 * 60000;
 
   let SERVER = (GM_getValue('server', '') || '').replace(/\/+$/, '');
   let TOKEN = GM_getValue('token', '') || '';
 
-  let clockOffset = 0;     // Date.now() + clockOffset ≈ ساعتِ سرور
+  let clockOffset = 0;
   let clockRtt = null;
   let lastSyncAt = 0;
 
-  let last = null;         // آخرین چیزی که فرستادیم
+  let last = null;
   let lastSentAt = 0;
   let lastSeenPos = 0;
   let lastSeenAt = 0;
 
-  // ──────────────────────────────────────────────────────────────
   const log = (...a) => console.log('%c[tglyrics]', 'color:#4ea1ff', ...a);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -77,7 +65,6 @@
     });
   }
 
-  // ── هماهنگی ساعت ─────────────────────────────────────────────
   async function syncClock() {
     if (!SERVER) return;
     let bestRtt = Infinity;
@@ -91,10 +78,9 @@
         const s = JSON.parse(txt).server_ms;
         if (rtt < bestRtt) {
           bestRtt = rtt;
-          bestOffset = s - (t0 + t3) / 2;   // NTP کلاسیک
+          bestOffset = s - (t0 + t3) / 2;
         }
       } catch (e) {
-        // بی‌خیال؛ اگر همه شکست خورد offset صفر می‌ماند
       }
       await sleep(120);
     }
@@ -108,7 +94,6 @@
 
   const serverNow = () => Date.now() + clockOffset;
 
-  // ── پیدا کردن پلیر ───────────────────────────────────────────
   function pickMedia() {
     const els = Array.from(document.querySelectorAll('video, audio'));
     if (!els.length) return null;
@@ -119,7 +104,6 @@
     return pick.reduce((a, b) => ((b.duration || 0) > (a.duration || 0) ? b : a));
   }
 
-  // ── متادیتا ──────────────────────────────────────────────────
   const txt = (sel) => {
     const n = document.querySelector(sel);
     return n ? (n.textContent || '').trim() : '';
@@ -173,18 +157,15 @@
     let artist = (md && md.artist) || dom.artist || '';
     const album = (md && md.album) || '';
 
-    // یوتیوب معمولی: عنوان معمولاً «خواننده - آهنگ» است
     if (!artist && title.includes(' - ')) {
       const i = title.indexOf(' - ');
       artist = title.slice(0, i).trim();
       title = title.slice(i + 3).trim();
     }
-    // «Topic» را از اسم کانال یوتیوب پاک کن
     artist = artist.replace(/\s*-\s*Topic\s*$/i, '').trim();
     return { title: title.trim(), artist, album };
   }
 
-  // ── وضعیت ────────────────────────────────────────────────────
   function snapshot() {
     const el = pickMedia();
     if (!el) return null;
@@ -250,10 +231,9 @@
     if (why) await send(s, why);
   }
 
-  // ── تنظیمات ──────────────────────────────────────────────────
   function configure() {
     const url = prompt(
-      'آدرس سرور tglyrics\nمثال:  http://۱.۲.۳.۴:8787  (با http:// یا https://)',
+      'آدرس سرور tglyrics\nمثال:  http://1.2.3.4:8787  (با http:// یا https://)',
       SERVER || 'http://'
     );
     if (url === null) return;
@@ -283,10 +263,8 @@
   GM_registerMenuCommand('⚙️ تنظیم سرور tglyrics', configure);
   GM_registerMenuCommand('🔌 تست اتصال', testConn);
 
-  // ── شروع ─────────────────────────────────────────────────────
   window.addEventListener('pagehide', () => {
     if (last && SERVER) {
-      // بهترین تلاش؛ ممکن است نرسد
       GM_xmlhttpRequest({
         method: 'POST',
         url: SERVER + '/ingest',

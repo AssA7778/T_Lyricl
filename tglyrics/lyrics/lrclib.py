@@ -1,17 +1,3 @@
-"""
-کلاینت LRCLIB — منبع اصلی لیریکِ سینک‌شده.
-
-چرا LRCLIB: رایگان، بدون کلید، بدون ثبت‌نام، سرورش متن‌باز (MIT).
-
-دو تله که در عمل خوردیم و اینجا هندل شده‌اند:
-
-  ۱. `/api/search` با فقط `artist_name` همیشه آرایه‌ی خالی می‌دهد.
-     باید `q` یا `track_name` بدهی. (با Radiohead هم تست شد، مخصوص فارسی نیست.)
-
-  ۲. `/api/get` (تطبیق دقیق) برای آهنگ‌های فارسی تقریباً همیشه ۴۰۴ می‌دهد،
-     چون آلبوم و duration معمولاً نمی‌خوانند. پس اول دقیق، بعد سرچِ فازی.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -51,8 +37,6 @@ def _sim(a: str, b: str) -> float:
         return 0.92
     best = difflib.SequenceMatcher(None, ka, kb).ratio()
 
-    # وقتی یک طرف فارسی و طرف دیگر فینگلیش است، مقایسه‌ی مستقیم بی‌فایده
-    # است. اسکلتِ بی‌واکه این شکاف را پر می‌کند (توضیح در translit.skeleton).
     if has_persian(a) != has_persian(b):
         sa, sb = skeleton(a), skeleton(b)
         if len(sa) >= 3 and len(sb) >= 3:
@@ -140,7 +124,6 @@ class LrcLibClient:
     async def search(
         self, q: str = "", track: str = "", artist: str = ""
     ) -> list[LrcLibResult]:
-        # ⚠️ artist_name به‌تنهایی همیشه خالی برمی‌گرداند
         params: dict[str, Any] = {}
         if q:
             params["q"] = q
@@ -155,7 +138,6 @@ class LrcLibClient:
             return []
         return [LrcLibResult.from_json(x) for x in d if isinstance(x, dict)]
 
-    # ── انتخاب بهترین ────────────────────────────────────────────
     @staticmethod
     def _score(
         r: LrcLibResult, artist: str, title: str, duration_s: Optional[int]
@@ -165,7 +147,6 @@ class LrcLibClient:
 
         if artist:
             a = _sim(artist, r.artist_name)
-            # اسم خواننده ممکن است فارسی باشد و آن‌طرف لاتین
             a = max(a, _sim(romanize(artist), r.artist_name))
             s += 2.0 * a
 
@@ -197,25 +178,20 @@ class LrcLibClient:
         *,
         synced_only: bool = True,
     ) -> Optional[LrcLibResult]:
-        """
-        بهترین تطبیق را پیدا کن. چند کاندیدا (اصل + فینگلیش) امتحان می‌شود.
-        """
         dur = int(round(duration_ms / 1000)) if duration_ms else None
         cands = candidates(artist, title)
         pool: dict[int, LrcLibResult] = {}
 
-        # ۱) تطبیق دقیق — سریع‌ترین و مطمئن‌ترین وقتی جواب بدهد
         for a, t in cands[:3]:
             if not a:
                 continue
             r = await self.get_exact(t, a, album, dur)
             if r and (r.synced or not synced_only):
-                r.score = self._score(r, artist, title, dur) + 1.0  # پاداش تطبیق دقیق
+                r.score = self._score(r, artist, title, dur) + 1.0
                 pool[r.id] = r
                 if r.synced:
                     break
 
-        # ۲) سرچ فازی
         if not any(r.synced for r in pool.values()):
             for a, t in cands:
                 q = f"{a} {t}".strip() if a else t
@@ -226,9 +202,6 @@ class LrcLibClient:
                 if any(x.synced and x.score > 6.0 for x in pool.values()):
                     break
 
-        # ۳) آخرین تلاش: فقط اسمِ خواننده را بگرد.
-        # برای فارسی این معمولاً بهترین کار را می‌کند — سرچِ «Mohsen Yeganeh»
-        # چند آهنگش را می‌آورد و بعد اسکلتِ بی‌واکه عنوانِ درست را پیدا می‌کند.
         if not any(r.synced and r.score > 5.0 for r in pool.values()):
             ra = romanize(artist) if has_persian(artist) else artist
             if ra and len(ra) >= 3:
@@ -241,8 +214,6 @@ class LrcLibClient:
             return None
 
         if synced_only:
-            # لیریکِ بدونِ زمان برای این پروژه بی‌فایده است — نمی‌شود سینکش
-            # کرد. عمداً به آن fallback نمی‌کنیم.
             picks = [r for r in pool.values() if r.synced]
             if not picks:
                 log.info("لیریک هست ولی سینک‌شده نیست: %s – %s", artist, title)
@@ -251,7 +222,6 @@ class LrcLibClient:
             picks = list(pool.values())
 
         best = max(picks, key=lambda r: r.score)
-        # آستانه — بهتر است هیچی نشان ندهیم تا لیریکِ آهنگِ اشتباه
         if best.score < 3.2:
             log.info(
                 "lrclib: بهترین تطبیق ضعیف بود (%.1f) برای %s – %s", best.score, artist, title

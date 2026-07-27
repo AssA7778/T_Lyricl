@@ -1,11 +1,3 @@
-"""
-تست تصمیمِ زمان‌بندی.
-
-مهم‌ترین چیزی که اینجا اثبات می‌شود: **هیچ‌وقت متنِ منقضی‌شده نوشته
-نمی‌شود.** وقتی محدودیت نرخ اجازه ندهد، برنامه صبر می‌کند و بعد *دوباره*
-حساب می‌کند — یعنی از خط می‌پرد، عقب نمی‌ماند.
-"""
-
 from __future__ import annotations
 
 import unittest
@@ -80,19 +72,14 @@ class TestDecide(unittest.TestCase):
 
 
 class TestNoStaleWrites(unittest.TestCase):
-    """
-    شبیه‌سازیِ کامل: یک آهنگ با خط‌های تند + محدودیت نرخِ سخت.
-    ادعا: هر چیزی که نوشته می‌شود، دقیقاً همان چیزی است که *در آن لحظه*
-    باید روی بیو باشد — نه یک خطِ قدیمی.
-    """
 
     def test_skips_forward_never_lags(self):
         lrc = "\n".join(f"[00:{i:02d}.00]خط شماره {i}" for i in range(0, 40, 2))
         ly = parse_lrc(lrc, duration_ms=42000)
         r = Renderer(RenderConfig(limit=70, show_interlude=False))
 
-        MIN_INTERVAL = 7.0          # عمداً کندتر از نرخِ خط‌ها (۲ ثانیه)
-        t = 0.0                     # زمان لیریک (ms) — همان زمان دیوار اینجا
+        MIN_INTERVAL = 7.0
+        t = 0.0
         last_write_at = -1e9
         current = ""
         written: list[tuple[float, str]] = []
@@ -105,7 +92,6 @@ class TestNoStaleWrites(unittest.TestCase):
                 current_text=current, t_ms=t, playing=True, ready_in=ready_in,
             )
             if d.write:
-                # ادعای اصلی: چیزی که می‌نویسیم همین الان معتبر است
                 expected = r.render(ly, None, t)
                 self.assertEqual(frame.text, expected.text)
                 self.assertLess(t, expected.until_ms)
@@ -116,11 +102,8 @@ class TestNoStaleWrites(unittest.TestCase):
             t += max(d.sleep, 0.001) * 1000.0
 
         self.assertGreater(len(written), 3)
-        # فاصله‌ی نوشتن‌ها هرگز از حد مجاز کمتر نشده
         for (a, _), (b, _) in zip(written, written[1:]):
             self.assertGreaterEqual(b - a, MIN_INTERVAL * 1000 - 1)
-        # و چون خط‌ها هر ۲ ثانیه‌اند ولی ما هر ۷ ثانیه می‌نویسیم، پریدن
-        # اتفاق افتاده — یعنی خط‌ها را جا انداختیم نه اینکه عقب بیفتیم
         nums = [int(txt.split()[-1]) for _, txt in written]
         self.assertEqual(nums, sorted(nums))
         self.assertLess(len(nums), 20)

@@ -1,5 +1,3 @@
-"""خواندن و اعتبارسنجی config.toml"""
-
 from __future__ import annotations
 
 import os
@@ -7,10 +5,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-try:  # py3.11+
+try:
     import tomllib
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 from .ratelimit import RateConfig
 from .render import RenderConfig
@@ -55,7 +53,6 @@ class Config:
     log_file: str = "data/tglyrics.log"
 
     def path(self, p: str) -> str:
-        """مسیر نسبی را نسبت به پوشه‌ی کانفیگ حساب کن."""
         if not p:
             return p
         q = Path(p)
@@ -68,7 +65,6 @@ def _sub(d: dict, key: str) -> dict:
 
 
 def _pick(dst: Any, src: dict, *names: str) -> None:
-    """فقط کلیدهای شناخته‌شده را بردار — غلط املایی توی کانفیگ بی‌صدا رد نشود."""
     for n in names:
         if n in src:
             cur = getattr(dst, n)
@@ -123,7 +119,6 @@ def load(path: str = "config.toml") -> Config:
     cfg.log_level = str(lg.get("level", "INFO")).upper()
     cfg.log_file = str(lg.get("file", "data/tglyrics.log"))
 
-    # ── اعتبارسنجی ───────────────────────────────────────────────
     t = cfg.telegram
     if not t.api_id or not t.api_hash:
         raise ConfigError(
@@ -139,7 +134,6 @@ def load(path: str = "config.toml") -> Config:
     if cfg.source_kind not in ("webhook", "spotify", "mpris"):
         raise ConfigError("source.kind باید webhook یا spotify یا mpris باشد")
 
-    # مسیرها را مطلق کن
     cfg.rate.state_file = cfg.path(cfg.rate.state_file)
     cfg.lyrics.cache_db = cfg.path(cfg.lyrics.cache_db)
     cfg.lyrics.local_dir = cfg.path(cfg.lyrics.local_dir)
